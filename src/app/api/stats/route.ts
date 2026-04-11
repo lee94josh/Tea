@@ -6,33 +6,33 @@ export async function GET() {
     // Rating distribution
     prisma.$queryRaw<{ rating: number; count: bigint }[]>`
       SELECT rating, COUNT(*) as count
-      FROM TeaSession
+      FROM "TeaSession"
       GROUP BY rating
       ORDER BY rating
     `,
 
     // Type stats with avg rating
     prisma.$queryRaw<{ type: string; sessionCount: bigint; avgRating: number }[]>`
-      SELECT t.type, COUNT(*) as sessionCount, AVG(s.rating) as avgRating
-      FROM TeaSession s
-      JOIN Tea t ON s.teaId = t.id
+      SELECT t.type, COUNT(*) as "sessionCount", AVG(s.rating) as "avgRating"
+      FROM "TeaSession" s
+      JOIN "Tea" t ON s."teaId" = t.id
       GROUP BY t.type
-      ORDER BY sessionCount DESC
+      ORDER BY "sessionCount" DESC
     `,
 
     // Weekly trend over last 6 months
     prisma.$queryRaw<{ week: string; count: bigint }[]>`
-      SELECT strftime('%Y-%W', consumedAt) as week, COUNT(*) as count
-      FROM TeaSession
-      WHERE consumedAt >= date('now', '-6 months')
+      SELECT to_char("consumedAt", 'IYYY-IW') as week, COUNT(*) as count
+      FROM "TeaSession"
+      WHERE "consumedAt" >= NOW() - INTERVAL '6 months'
       GROUP BY week
       ORDER BY week
     `,
 
     // Totals
     prisma.$queryRaw<{ totalSessions: bigint; avgRating: number }[]>`
-      SELECT COUNT(*) as totalSessions, AVG(rating) as avgRating
-      FROM TeaSession
+      SELECT COUNT(*) as "totalSessions", AVG(rating) as "avgRating"
+      FROM "TeaSession"
     `,
   ]);
 
