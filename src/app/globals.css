@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 250 247 242;
+    --foreground: 28 20 14;
+    --card: 255 255 255;
+    --card-foreground: 28 20 14;
+    --primary: 120 83 70;
+    --primary-foreground: 250 247 242;
+    --secondary: 242 235 224;
+    --secondary-foreground: 84 56 42;
+    --muted: 242 235 224;
+    --muted-foreground: 120 100 80;
+    --accent: 242 235 224;
+    --accent-foreground: 84 56 42;
+    --border: 228 213 192;
+    --input: 228 213 192;
+    --ring: 173 125 80;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    border-color: rgb(228 213 192);
+  }
+  body {
+    @apply bg-[rgb(var(--background))] text-[rgb(var(--foreground))];
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Scrollbar hide for horizontal scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth tap highlight removal */
+* {
+  -webkit-tap-highlight-color: transparent;
+}

@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tea {
+  id        String       @id @default(cuid())
+  name      String
+  type      String
+  origin    String?
+  brand     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  sessions  TeaSession[]
+
+  @@index([type])
+  @@index([name])
+}
+
+model TeaSession {
+  id           String   @id @default(cuid())
+  teaId        String
+  rating       Int
+  notes        String?
+  brewTempC    Int?
+  steepTimeSec Int?
+  photoUrl     String?
+  consumedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tea          Tea      @relation(fields: [teaId], references: [id], onDelete: Cascade)
+
+  @@index([teaId])
+  @@index([consumedAt])
+  @@index([rating])
+}

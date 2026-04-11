@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# PWA generated files
+public/sw.js
+public/workbox-*.js
+public/worker-*.js
+public/fallback-*.js
+
+# Database
+tea.db
+tea.db-journal
+tea.db-wal
+tea.db-shm
+
+# Uploads (runtime photos)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Misc
+.DS_Store
+*.pem
+npm-debug.log*
