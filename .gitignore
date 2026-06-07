@@ -1,32 +1,34 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
-# Next.js
-.next/
-out/
+# Build output
+dist/
+build/
+*.tsbuildinfo
 
-# PWA generated files
-public/sw.js
-public/workbox-*.js
-public/worker-*.js
-public/fallback-*.js
+# Vite / web
+web/dev-dist/
+web/dist/
 
-# Database
-tea.db
-tea.db-journal
-tea.db-wal
-tea.db-shm
-
-# Uploads (runtime photos)
-public/uploads/*
-!public/uploads/.gitkeep
+# Local object storage (when using disk backend)
+.storage/
+server/.storage/
 
 # Environment
 .env
 .env.local
 .env.*.local
 
+# Test assets for the day-0 harness (keep your real photos out of git)
+scripts/test-assets/*
+!scripts/test-assets/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
 # Misc
 .DS_Store
 *.pem
-npm-debug.log*
+coverage/

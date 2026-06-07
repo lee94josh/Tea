@@ -1,0 +1,36 @@
+/**
+ * `ingest:geocode` — resolve a venue for photos that have GPS. Runs in parallel
+ * with derivatives and does NOT gate completion (a photo can be `done` without a
+ * resolved venue). Skips entirely when there's no GPS or no Places key.
+ */
+
+import { query } from '../db';
+import { geocode } from '../integrations/geocode';
+import { env } from '../env';
+
+export interface GeocodeJob {
+  photoId: string;
+  lat: number;
+  lng: number;
+}
+
+export async function runGeocode(data: GeocodeJob): Promise<void> {
+  const { photoId, lat, lng } = data;
+  if (lat == null || lng == null) return;
+  if (!env.googlePlaces.apiKey) {
+    console.warn('[geocode] GOOGLE_PLACES_API_KEY unset — skipping venue resolution');
+    return;
+  }
+
+  const candidates = await geocode().nearbyVenues(lat, lng);
+  if (candidates.length === 0) return;
+
+  // Store top candidates (cap a few) for the clustering step to pick from.
+  for (const c of candidates.slice(0, 3)) {
+    await query(
+      `insert into venues (photo_id, name, category, address, place_id, confidence, source)
+       values ($1,$2,$3,$4,$5,$6,$7)`,
+      [photoId, c.name, c.category, c.address, c.placeId, c.confidence, c.source],
+    );
+  }
+}

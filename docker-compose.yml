@@ -1,15 +1,16 @@
-version: "3.9"
+# Local Postgres with pgvector for development.
+# Usage: docker compose up -d  → DATABASE_URL=postgresql://lookback:lookback@localhost:5432/lookback
 services:
-  postgres:
-    image: postgres:16-alpine
+  db:
+    image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: tea
-      POSTGRES_PASSWORD: tea
-      POSTGRES_DB: tea
+      POSTGRES_USER: lookback
+      POSTGRES_PASSWORD: lookback
+      POSTGRES_DB: lookback
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - lookback_pgdata:/var/lib/postgresql/data
 
 volumes:
-  postgres_data:
+  lookback_pgdata:
