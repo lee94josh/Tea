@@ -42,11 +42,18 @@ export function boss(): PgBoss {
   return _boss;
 }
 
-/** Enqueue a job (thin wrapper for readability + typing). */
+/** Enqueue a job (thin wrapper for readability + typing).
+ *  Default retries with backoff so transient model-API failures (429s, blips)
+ *  re-run instead of stranding a photo/moment in `error`. */
 export async function enqueue<T extends object>(
   name: JobName,
   data: T,
   options?: PgBoss.SendOptions,
 ): Promise<void> {
-  await boss().send(name, data, options ?? {});
+  await boss().send(name, data, {
+    retryLimit: 4,
+    retryDelay: 20,
+    retryBackoff: true,
+    ...options,
+  });
 }

@@ -91,8 +91,50 @@ export class GooglePlaces implements GeocodeClient {
   }
 }
 
+/**
+ * Keyless fallback: OpenStreetMap Nominatim reverse geocoding. No API key, free
+ * for light use (single-user is well within policy; identify with a UA). Less
+ * venue-precise than Places but gives a real name/address instead of nothing —
+ * and never hallucinated, which the spec cares about more.
+ */
+export class NominatimGeocode implements GeocodeClient {
+  async nearbyVenues(lat: number, lng: number): Promise<VenueCandidate[]> {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lon', String(lng));
+    url.searchParams.set('zoom', '18'); // building/venue level
+
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'lookback/0.1 (personal photo app; single user)' },
+    });
+    if (!res.ok) throw new Error(`Nominatim reverse ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as {
+      name?: string;
+      display_name?: string;
+      category?: string;
+      type?: string;
+      osm_type?: string;
+      osm_id?: number;
+    };
+    if (!data.display_name && !data.name) return [];
+    return [
+      {
+        name: data.name || null,
+        category: data.type ?? data.category ?? null,
+        address: data.display_name ?? null,
+        placeId: data.osm_id != null ? `${data.osm_type ?? 'osm'}/${data.osm_id}` : null,
+        confidence: data.name ? 0.5 : 0.25,
+        source: 'nominatim',
+      },
+    ];
+  }
+}
+
 let _geo: GeocodeClient | null = null;
 export function geocode(): GeocodeClient {
-  if (!_geo) _geo = new GooglePlaces();
+  if (!_geo) {
+    _geo = env.googlePlaces.apiKey ? new GooglePlaces() : new NominatimGeocode();
+  }
   return _geo;
 }

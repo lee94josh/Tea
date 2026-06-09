@@ -28,13 +28,17 @@ export interface ExtractedExif {
   raw: Record<string, unknown>;
 }
 
-/** Common phone/tablet screen aspect ratios (w:h, orientation-agnostic). */
+/**
+ * Common phone screen aspect ratios (w:h, orientation-agnostic).
+ * Deliberately EXCLUDES 4:3 and 3:2 — those are camera sensor ratios, so
+ * including them mass-flags real photos whose EXIF was stripped in transit
+ * (no GPS + no camera make + 4:3 ≈ every iPhone photo). An iPad screenshot
+ * slipping through is far cheaper than a real photo being dropped from moments.
+ */
 const SCREEN_ASPECTS = [
   19.5 / 9, // modern iPhone
-  16 / 9,
-  4 / 3, // iPad
-  3 / 2,
-  20 / 9,
+  20 / 9, // many Androids
+  16 / 9, // older phones
 ];
 
 function approxAspectMatch(width: number, height: number): boolean {

@@ -1,0 +1,18 @@
+# Railway config for Lookback.
+#
+# Setup (one time, ~5 minutes):
+#   1. New project → Deploy from GitHub repo (this repo, this branch).
+#   2. Add the Postgres plugin to the project (DATABASE_URL auto-injects).
+#   3. On the app service: add a Volume mounted at /data (photo storage).
+#   4. Set the env vars listed in .env.example (APP_TOKEN, GEMINI_API_KEY,
+#      STORAGE_DISK_PATH=/data, VAPID keys). That's it — one key runs it all.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5

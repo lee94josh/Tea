@@ -21,18 +21,25 @@ export interface EmbedJob {
 export async function runEmbed(data: EmbedJob): Promise<void> {
   const { photoId, visionKey } = data;
   try {
+    // Embeddings are best-effort: a failure here (text-only embed model, missing
+    // pgvector, quota) must NOT block the photo — MVP clustering never reads
+    // embeddings. Log and move on.
     if (env.gemini.apiKey) {
-      const bytes = await storage().get(visionKey);
-      const vec = await embeddings().embedImage(bytes, 'image/jpeg');
-      await setStatus(photoId, 'embedded');
-      // pgvector accepts the bracketed string form: '[1,2,3]'.
-      await query(
-        `insert into photo_embeddings (photo_id, embedding) values ($1, $2)
-         on conflict (photo_id) do update set embedding = excluded.embedding`,
-        [photoId, JSON.stringify(vec)],
-      );
-    } else {
-      console.warn('[embed] GEMINI_API_KEY unset — skipping embedding');
+      try {
+        const bytes = await storage().get(visionKey);
+        const vec = await embeddings().embedImage(bytes, 'image/jpeg');
+        await setStatus(photoId, 'embedded');
+        // pgvector accepts the bracketed string form: '[1,2,3]'.
+        await query(
+          `insert into photo_embeddings (photo_id, embedding) values ($1, $2)
+           on conflict (photo_id) do update set embedding = excluded.embedding`,
+          [photoId, JSON.stringify(vec)],
+        );
+      } catch (err) {
+        console.warn(
+          `[embed] skipped for ${photoId} (non-fatal): ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
 
     await setStatus(photoId, 'done');

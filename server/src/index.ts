@@ -4,9 +4,13 @@
  * is deliberately NOT serverless).
  */
 
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import { env } from './env';
 import { pool } from './db';
 import { startBoss } from './queue';
@@ -37,6 +41,16 @@ async function main() {
   conversationRoutes(app);
   pushRoutes(app);
   fileRoutes(app);
+
+  // Single-origin deploy: serve the built PWA from this server when web/dist
+  // exists (no separate static host, no CORS, PWA + API + images on one HTTPS
+  // origin — exactly what iOS Safari wants).
+  const here = dirname(fileURLToPath(import.meta.url));
+  const webDist = process.env.WEB_DIST ?? join(here, '..', '..', 'web', 'dist');
+  if (existsSync(join(webDist, 'index.html'))) {
+    await app.register(fastifyStatic, { root: webDist, wildcard: false });
+    app.log.info(`serving PWA from ${webDist}`);
+  }
 
   // Start the worker in-process.
   const boss = await startBoss();

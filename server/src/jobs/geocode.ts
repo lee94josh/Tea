@@ -6,7 +6,6 @@
 
 import { query } from '../db';
 import { geocode } from '../integrations/geocode';
-import { env } from '../env';
 
 export interface GeocodeJob {
   photoId: string;
@@ -17,10 +16,6 @@ export interface GeocodeJob {
 export async function runGeocode(data: GeocodeJob): Promise<void> {
   const { photoId, lat, lng } = data;
   if (lat == null || lng == null) return;
-  if (!env.googlePlaces.apiKey) {
-    console.warn('[geocode] GOOGLE_PLACES_API_KEY unset — skipping venue resolution');
-    return;
-  }
 
   const candidates = await geocode().nearbyVenues(lat, lng);
   if (candidates.length === 0) return;

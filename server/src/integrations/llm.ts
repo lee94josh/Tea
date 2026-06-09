@@ -1,10 +1,13 @@
 /**
- * Reasoning LLM — seed generation and the conversation engine. Default: Claude
- * Opus via the Anthropic API. Swappable here in one place (by this stage inputs
- * are text + a few images, so any frontier model works).
+ * Reasoning LLM — seed generation and the conversation engine. Two providers
+ * behind one interface, picked at runtime:
+ *   - Anthropic (Claude Opus) when ANTHROPIC_API_KEY is set
+ *   - Gemini otherwise — so a single GEMINI_API_KEY runs the whole product
+ * By this stage inputs are text + a few images, so any frontier model works.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import type { MomentAnalysis, Message, SeedDraft } from '@lookback/shared';
 import { env } from '../env';
 
@@ -170,8 +173,100 @@ function normalizeSeed(text: string): SeedDraft {
   };
 }
 
+// --- Gemini provider ------------------------------------------------------
+
+const SEED_SCHEMA = {
+  type: 'object',
+  properties: {
+    opener: { type: 'string' },
+    suggested_replies: { type: 'array', items: { type: 'string' } },
+    quality_score: { type: 'number' },
+  },
+  required: ['opener', 'suggested_replies', 'quality_score'],
+} as const;
+
+export class GeminiLlm implements LlmClient {
+  private ai = new GoogleGenAI({ apiKey: env.gemini.apiKey });
+
+  async generateSeed(ctx: SeedContext): Promise<SeedDraft> {
+    const res = await this.ai.models.generateContent({
+      model: env.gemini.visionModel, // seeds are background work: use the pro model
+      contents: [
+        { role: 'user', parts: [{ text: contextBlock(ctx.analysis, ctx.venueName, ctx.date) }] },
+      ],
+      config: {
+        systemInstruction: SEED_SYSTEM,
+        responseMimeType: 'application/json',
+        responseSchema: SEED_SCHEMA as unknown as object,
+        temperature: 0.8,
+      },
+    });
+    return normalizeSeed(res.text ?? '');
+  }
+
+  async streamConversation(
+    ctx: ConversationContext,
+    onDelta: (text: string) => void,
+  ): Promise<string> {
+    // Context + images ride on a synthetic first user turn, mirroring the
+    // Anthropic provider so history replays identically.
+    const firstParts: Array<Record<string, unknown>> = [
+      { text: contextBlock(ctx.analysis, ctx.venueName, ctx.date) },
+    ];
+    for (const img of ctx.images.slice(0, 8)) {
+      firstParts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+    }
+
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<Record<string, unknown>> }> = [
+      { role: 'user', parts: firstParts },
+    ];
+    if (ctx.history.length === 0 || ctx.history[0]?.role !== 'assistant') {
+      contents.push({ role: 'model', parts: [{ text: 'ok, looking through these now' }] });
+    }
+    for (const m of ctx.history) {
+      contents.push({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      });
+    }
+
+    // Interactive path: if the preferred chat model is overloaded (Gemini flash
+    // tiers 503 under "high demand" spikes), fall back through rolling aliases
+    // instead of failing the user's message. Only models that error BEFORE
+    // emitting a token are retried, so the user never sees duplicated text.
+    const chain = [...new Set([env.gemini.chatModel, 'gemini-flash-latest', 'gemini-flash-lite-latest'])];
+    let lastErr: unknown = null;
+
+    for (const model of chain) {
+      let full = '';
+      try {
+        const stream = await this.ai.models.generateContentStream({
+          model,
+          contents,
+          config: { systemInstruction: CONVERSATION_SYSTEM, temperature: 0.9 },
+        });
+        for await (const chunk of stream) {
+          const t = chunk.text;
+          if (t) {
+            full += t;
+            onDelta(t);
+          }
+        }
+        return full;
+      } catch (err) {
+        if (full.length > 0) throw err; // mid-stream failure: don't re-run
+        lastErr = err;
+        console.warn(`[llm] chat model ${model} unavailable, trying next: ${err instanceof Error ? err.message.slice(0, 120) : err}`);
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('all chat models unavailable');
+  }
+}
+
 let _llm: LlmClient | null = null;
 export function llm(): LlmClient {
-  if (!_llm) _llm = new AnthropicLlm();
+  if (!_llm) {
+    _llm = env.anthropic.apiKey ? new AnthropicLlm() : new GeminiLlm();
+  }
   return _llm;
 }

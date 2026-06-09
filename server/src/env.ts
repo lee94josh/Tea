@@ -1,5 +1,16 @@
 /** Centralised, typed env access. Fails fast on what's truly required. */
 
+// Auto-load a .env file if one exists (repo root or server/). Real deployments
+// (Railway etc.) inject env vars directly and have no .env file.
+for (const candidate of ['../.env', '.env']) {
+  try {
+    process.loadEnvFile(candidate);
+    break;
+  } catch {
+    /* no .env there — fine */
+  }
+}
+
 function req(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing required env var: ${name}`);
@@ -22,7 +33,9 @@ export const env = {
   databaseUrl: req('DATABASE_URL'),
 
   port: num('PORT', 8080),
-  publicBaseUrl: opt('PUBLIC_BASE_URL', `http://localhost:${num('PORT', 8080)}`),
+  // Empty string = relative URLs, correct when the server serves the PWA itself
+  // (single-origin deploy). Set absolute only for cross-origin dev (5173→8080).
+  publicBaseUrl: opt('PUBLIC_BASE_URL', ''),
   webOrigin: opt('WEB_ORIGIN', 'http://localhost:5173'),
 
   storage: {
@@ -38,7 +51,10 @@ export const env = {
 
   gemini: {
     apiKey: opt('GEMINI_API_KEY'),
-    visionModel: opt('GEMINI_VISION_MODEL', 'gemini-3-pro'),
+    // Rolling alias — survives Google's preview-model retirements.
+    visionModel: opt('GEMINI_VISION_MODEL', 'gemini-pro-latest'),
+    // Interactive conversation: flash for instant-feeling streamed replies.
+    chatModel: opt('GEMINI_CHAT_MODEL', 'gemini-3.5-flash'),
     embedModel: opt('GEMINI_EMBED_MODEL', 'gemini-embedding-001'),
     embedDim: num('EMBED_DIM', 1408),
   },

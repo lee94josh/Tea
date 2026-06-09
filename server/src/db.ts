@@ -4,11 +4,15 @@ import { env } from './env';
 
 export const pool = new pg.Pool({ connectionString: env.databaseUrl });
 
-// Register pgvector type parsing on every new connection.
+// Register pgvector type parsing on every new connection. The extension is
+// optional (embeddings are best-effort); warn once, not per-connection.
+let warnedNoVector = false;
 pool.on('connect', (client) => {
-  pgvector.registerType(client).catch((err) => {
-    // Non-fatal: vector queries will surface their own errors if this failed.
-    console.error('pgvector registerType failed', err);
+  pgvector.registerType(client).catch(() => {
+    if (!warnedNoVector) {
+      warnedNoVector = true;
+      console.warn('[db] pgvector not installed — embeddings disabled (MVP unaffected)');
+    }
   });
 });
 

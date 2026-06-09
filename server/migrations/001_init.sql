@@ -1,7 +1,14 @@
--- Lookback initial schema. Requires Postgres with the pgvector extension.
--- The vector dimension below must match EMBED_DIM / the embedding model.
+-- Lookback initial schema. pgvector is OPTIONAL: embeddings are a v2 nicety
+-- (sub-event splitting); the MVP pipeline never reads them. If the extension
+-- isn't available on the host, we skip it and the photo_embeddings table —
+-- everything else works. The vector dimension must match EMBED_DIM.
 
-create extension if not exists vector;
+do $$ begin
+  create extension if not exists vector;
+exception when others then
+  raise notice 'pgvector unavailable — skipping (embeddings disabled, MVP unaffected)';
+end $$;
+
 create extension if not exists "pgcrypto"; -- gen_random_uuid()
 
 create table if not exists photos (
@@ -38,10 +45,14 @@ create table if not exists venues (
 );
 create index if not exists venues_photo_idx on venues (photo_id);
 
-create table if not exists photo_embeddings (
-  photo_id        uuid primary key references photos(id) on delete cascade,
-  embedding       vector(1408)
-);
+do $$ begin
+  if exists (select 1 from pg_type where typname = 'vector') then
+    create table if not exists photo_embeddings (
+      photo_id    uuid primary key references photos(id) on delete cascade,
+      embedding   vector(1408)
+    );
+  end if;
+end $$;
 
 create table if not exists moments (
   id              uuid primary key default gen_random_uuid(),

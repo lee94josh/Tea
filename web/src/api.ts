@@ -8,7 +8,9 @@ import type {
   UploadResult,
 } from '@lookback/shared';
 
-const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
+// Production default is '' = same origin (the server serves the PWA itself).
+// Dev default points at the local API since vite runs on its own port.
+const BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? 'http://localhost:8080' : '');
 const TOKEN_KEY = 'lookback.token';
 
 export function getToken(): string {
