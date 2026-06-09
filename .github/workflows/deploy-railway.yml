@@ -58,9 +58,9 @@ jobs:
           J=$(web-push generate-vapid-keys --json)
           VPUB=$(echo "$J" | jq -r .publicKey)
           VPRIV=$(echo "$J" | jq -r .privateKey)
-          # Literal Railway reference ${{Postgres.DATABASE_URL}} built by
-          # concatenation so Actions' own expression parser never sees it.
-          DBREF='$''{{Postgres.DATABASE_URL}}'
+          # Literal Railway reference var (dollar + double-brace) assembled via
+          # printf so Actions' expression parser never sees doubled braces.
+          DBREF=$(printf '$%s%sPostgres.DATABASE_URL%s%s' '{' '{' '}' '}')
           railway variables --service "$SVC" \
             --set "APP_TOKEN=${{ secrets.APP_TOKEN }}" \
             --set "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
