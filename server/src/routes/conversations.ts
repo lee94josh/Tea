@@ -149,11 +149,27 @@ export function conversationRoutes(app: FastifyInstance): void {
         return reply;
       }
 
-      // Persist the assistant reply and signal completion.
+      // Persist the assistant reply.
       await query(
         `insert into messages (conversation_id, role, content) values ($1, 'assistant', $2)`,
         [conversationId, full],
       );
+
+      // Fresh suggested replies to keep the back-and-forth going (non-fatal:
+      // if generation fails, the user still has the free-text input).
+      let suggestions: string[] = [];
+      try {
+        suggestions = await llm().suggestReplies({
+          analysis,
+          venueName,
+          date,
+          images: [],
+          history: [...historyRes.rows, { role: 'assistant', content: full }],
+        });
+      } catch (err) {
+        req.log.warn({ err }, 'suggestReplies failed');
+      }
+      send('suggestions', { replies: suggestions });
       send('done', { content: full });
       reply.raw.end();
       return reply;

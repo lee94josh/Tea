@@ -1,11 +1,13 @@
 /**
+ * GET  /moments           — all seeded moments (quality-ordered) for prev/next
+ *                           navigation, each linked to its conversation if started.
  * GET  /seeds/next        — highest-quality unused seed + its moment & photos.
  * POST /seeds/:id/start   — create a conversation from a seed; persist the
  *                           opener as the first assistant message.
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { NextSeed, StartedConversation } from '@lookback/shared';
+import type { MomentListItem, NextSeed, StartedConversation } from '@lookback/shared';
 import { query } from '../db';
 import { requireAuth } from '../auth';
 import { toMoment, toSeed, toConversation, toPhotoRef } from '../serialize';
@@ -29,6 +31,46 @@ async function momentPhotos(momentId: string): Promise<PhotoRow[]> {
 }
 
 export function seedRoutes(app: FastifyInstance): void {
+  app.get('/moments', { preHandler: requireAuth }, async () => {
+    const rows = await query<{
+      seed_id: string;
+      opener: string;
+      suggested_replies: unknown;
+      quality_score: number | null;
+      moment_id: string;
+      title: string | null;
+      venue_name: string | null;
+      started_at: string | null;
+      conversation_id: string | null;
+    }>(`
+      select s.id as seed_id, s.opener, s.suggested_replies, s.quality_score,
+             m.id as moment_id, m.title, m.venue_name, m.started_at,
+             (select c.id from conversations c where c.seed_id = s.id
+                order by c.created_at desc limit 1) as conversation_id
+        from conversation_seeds s
+        join moments m on m.id = s.moment_id
+       order by s.quality_score desc nulls last, s.created_at asc
+    `);
+
+    const items: MomentListItem[] = await Promise.all(
+      rows.rows.map(async (r) => ({
+        momentId: r.moment_id,
+        seedId: r.seed_id,
+        conversationId: r.conversation_id ?? null,
+        title: r.title,
+        venueName: r.venue_name,
+        startedAt: r.started_at ? new Date(r.started_at).toISOString() : null,
+        qualityScore: r.quality_score,
+        opener: r.opener,
+        suggestedReplies: Array.isArray(r.suggested_replies)
+          ? (r.suggested_replies as string[])
+          : [],
+        photos: await Promise.all((await momentPhotos(r.moment_id)).map(toPhotoRef)),
+      })),
+    );
+    return items;
+  });
+
   app.get('/seeds/next', { preHandler: requireAuth }, async () => {
     const seedRes = await query(
       `select * from conversation_seeds

@@ -2,6 +2,7 @@
 
 import type {
   ConversationHistory,
+  MomentListItem,
   NextSeed,
   StartedConversation,
   StatusReport,
@@ -61,6 +62,10 @@ export const api = {
     return json(await fetch(`${BASE}/seeds/next`, { headers: authHeaders() }));
   },
 
+  async listMoments(): Promise<MomentListItem[]> {
+    return json(await fetch(`${BASE}/moments`, { headers: authHeaders() }));
+  },
+
   async startSeed(seedId: string): Promise<StartedConversation> {
     return json(
       await fetch(`${BASE}/seeds/${seedId}/start`, {
@@ -76,13 +81,13 @@ export const api = {
 
   /**
    * Send a message and stream the assistant reply over SSE.
-   * Resolves with the full assistant text once the stream completes.
+   * Resolves with the full assistant text + fresh suggested replies.
    */
   async sendMessage(
     conversationId: string,
     content: string,
     onDelta: (text: string) => void,
-  ): Promise<string> {
+  ): Promise<{ text: string; suggestions: string[] }> {
     const res = await fetch(`${BASE}/conversations/${conversationId}/messages`, {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
@@ -94,6 +99,7 @@ export const api = {
     const decoder = new TextDecoder();
     let buffer = '';
     let full = '';
+    let suggestions: string[] = [];
 
     for (;;) {
       const { value, done } = await reader.read();
@@ -112,6 +118,8 @@ export const api = {
         if (event === 'delta') {
           full += data.text;
           onDelta(data.text);
+        } else if (event === 'suggestions') {
+          suggestions = Array.isArray(data.replies) ? data.replies : [];
         } else if (event === 'done') {
           full = data.content ?? full;
         } else if (event === 'error') {
@@ -119,7 +127,7 @@ export const api = {
         }
       }
     }
-    return full;
+    return { text: full, suggestions };
   },
 
   async vapidPublicKey(): Promise<string> {

@@ -171,6 +171,24 @@ export interface NextSeed {
   photos: PhotoRef[];
 }
 
+/**
+ * `GET /moments` item — one entry per seeded moment, ordered by quality. Drives
+ * the prev/next navigation across moment conversations. `conversationId` is set
+ * once the moment has been opened/started, so it can be resumed.
+ */
+export interface MomentListItem {
+  momentId: string;
+  seedId: string;
+  conversationId: string | null;
+  title: string | null;
+  venueName: string | null;
+  startedAt: string | null;
+  qualityScore: number | null;
+  opener: string;
+  suggestedReplies: string[];
+  photos: PhotoRef[];
+}
+
 /** `POST /seeds/:id/start` payload. */
 export interface StartedConversation {
   conversation: Conversation;

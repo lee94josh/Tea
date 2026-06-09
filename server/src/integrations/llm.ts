@@ -34,6 +34,8 @@ export interface LlmClient {
   generateSeed(ctx: SeedContext): Promise<SeedDraft>;
   /** Streams the assistant reply token-by-token via the onDelta callback. */
   streamConversation(ctx: ConversationContext, onDelta: (text: string) => void): Promise<string>;
+  /** Three fresh user-voice replies to keep the back-and-forth going. */
+  suggestReplies(ctx: ConversationContext): Promise<string[]>;
 }
 
 // --- prompts -------------------------------------------------------------
@@ -71,6 +73,15 @@ how you talk:
 
 you're not completing a task. you're someone good to text with.`;
 
+const SUGGEST_SYSTEM = `given a texting conversation about someone's photos, write THREE short things the USER might text back next, in the user's own voice.
+
+rules:
+- all lowercase, casual, like texting. each under ~12 words.
+- make them genuinely different directions: one that answers/goes deeper, one that pivots or pushes back, one tangent or new thread. not three rephrasings of the same thing.
+- they reply to the LAST thing the friend said. don't repeat things already said.
+- no quotes, no numbering, no emoji.
+return JSON: { "replies": ["...", "...", "..."] }`;
+
 function contextBlock(
   analysis: MomentAnalysis | null,
   venueName?: string | null,
@@ -81,6 +92,37 @@ function contextBlock(
   if (date) lines.push(`Date: ${date}`);
   if (analysis) lines.push(`Analysis: ${JSON.stringify(analysis)}`);
   return lines.join('\n');
+}
+
+/** Render history as a transcript for the suggestion prompt ("you" = the user). */
+function transcript(history: Pick<Message, 'role' | 'content'>[]): string {
+  return history
+    .map((m) => `${m.role === 'assistant' ? 'friend' : 'you'}: ${m.content}`)
+    .join('\n');
+}
+
+function suggestPrompt(ctx: ConversationContext): string {
+  return [
+    contextBlock(ctx.analysis, ctx.venueName, ctx.date),
+    '',
+    'the conversation so far:',
+    transcript(ctx.history),
+    '',
+    "write 3 things 'you' might text back next.",
+  ].join('\n');
+}
+
+function normalizeReplies(text: string): string[] {
+  try {
+    const match = text.match(/\{[\s\S]*\}/);
+    const parsed = match ? JSON.parse(match[0]) : {};
+    if (Array.isArray(parsed.replies)) {
+      return parsed.replies.filter((x: unknown): x is string => typeof x === 'string').slice(0, 3);
+    }
+  } catch {
+    /* fall through */
+  }
+  return [];
 }
 
 export class AnthropicLlm implements LlmClient {
@@ -150,6 +192,20 @@ export class AnthropicLlm implements LlmClient {
     });
     await stream.finalMessage();
     return full;
+  }
+
+  async suggestReplies(ctx: ConversationContext): Promise<string[]> {
+    const res = await this.client.messages.create({
+      model: env.anthropic.model,
+      max_tokens: 256,
+      system: SUGGEST_SYSTEM,
+      messages: [{ role: 'user', content: suggestPrompt(ctx) }],
+    });
+    const text = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    return normalizeReplies(text);
   }
 }
 
@@ -260,6 +316,36 @@ export class GeminiLlm implements LlmClient {
       }
     }
     throw lastErr instanceof Error ? lastErr : new Error('all chat models unavailable');
+  }
+
+  async suggestReplies(ctx: ConversationContext): Promise<string[]> {
+    // Same rolling-alias fallback as the chat stream: flash tiers 503 under load.
+    const chain = [
+      ...new Set([env.gemini.chatModel, 'gemini-flash-latest', 'gemini-flash-lite-latest']),
+    ];
+    let lastErr: unknown = null;
+    for (const model of chain) {
+      try {
+        const res = await this.ai.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: suggestPrompt(ctx) }] }],
+          config: {
+            systemInstruction: SUGGEST_SYSTEM,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'object',
+              properties: { replies: { type: 'array', items: { type: 'string' } } },
+              required: ['replies'],
+            } as unknown as object,
+            temperature: 0.9,
+          },
+        });
+        return normalizeReplies(res.text ?? '');
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('all suggestion models unavailable');
   }
 }
 
