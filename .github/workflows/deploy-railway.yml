@@ -1,0 +1,102 @@
+# One-shot Railway deploy, driven entirely by CI so no local Railway access is
+# needed. Requires three repository secrets (Settings → Secrets → Actions):
+#   RAILWAY_TOKEN   — Railway account token (delete it after deploying)
+#   GEMINI_API_KEY  — runs vision + seeds + conversation
+#   APP_TOKEN       — the app's login token (you choose it)
+# VAPID keys are generated fresh during the run and stored only in Railway.
+
+name: deploy-railway
+
+on:
+  workflow_dispatch: {}
+
+concurrency: railway-deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      SVC: lookback
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Preflight
+        run: |
+          set -euo pipefail
+          [ -n "$RAILWAY_API_TOKEN" ] || { echo "::error::RAILWAY_TOKEN secret missing"; exit 1; }
+          [ -n "${{ secrets.GEMINI_API_KEY }}" ] || { echo "::error::GEMINI_API_KEY secret missing"; exit 1; }
+          [ -n "${{ secrets.APP_TOKEN }}" ] || { echo "::error::APP_TOKEN secret missing"; exit 1; }
+          npm i -g @railway/cli web-push
+          railway --version
+          railway whoami
+
+      - name: Create or link project
+        run: |
+          set -euo pipefail
+          if railway link --project lookback --environment production 2>/dev/null; then
+            echo "linked existing project"
+          else
+            railway init --name lookback
+          fi
+          railway status
+
+      - name: Ensure services (Postgres + app)
+        run: |
+          set -euo pipefail
+          railway add --database postgres || echo "(postgres may already exist)"
+          railway add --service "$SVC" || echo "(service may already exist)"
+
+      - name: Configure variables
+        run: |
+          set -euo pipefail
+          J=$(web-push generate-vapid-keys --json)
+          VPUB=$(echo "$J" | jq -r .publicKey)
+          VPRIV=$(echo "$J" | jq -r .privateKey)
+          # Literal Railway reference ${{Postgres.DATABASE_URL}} built by
+          # concatenation so Actions' own expression parser never sees it.
+          DBREF='$''{{Postgres.DATABASE_URL}}'
+          railway variables --service "$SVC" \
+            --set "APP_TOKEN=${{ secrets.APP_TOKEN }}" \
+            --set "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set "DATABASE_URL=$DBREF" \
+            --set "STORAGE_DRIVER=disk" \
+            --set "STORAGE_DISK_PATH=/data" \
+            --set "VAPID_PUBLIC_KEY=$VPUB" \
+            --set "VAPID_PRIVATE_KEY=$VPRIV" \
+            --set "VAPID_SUBJECT=mailto:lookback@users.noreply.github.com"
+
+      - name: Attach volume for photo storage
+        run: |
+          set -euo pipefail
+          railway volume add --mount-path /data --service "$SVC" \
+            || echo "(volume may already exist)"
+
+      - name: Deploy
+        run: railway up --service "$SVC" --detach
+
+      - name: Generate domain and wait for health
+        run: |
+          set -euo pipefail
+          OUT=$(railway domain --service "$SVC")
+          echo "$OUT"
+          DOMAIN=$(echo "$OUT" | grep -oE '[A-Za-z0-9.-]+\.up\.railway\.app' | head -1)
+          [ -n "$DOMAIN" ] || { echo "::error::could not determine domain"; exit 1; }
+          echo "app url: https://$DOMAIN"
+          for i in $(seq 1 60); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/health" || true)
+            echo "health attempt $i: $CODE"
+            if [ "$CODE" = "200" ]; then
+              echo "LIVE: https://$DOMAIN"
+              echo "### Lookback is live: https://$DOMAIN" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::health check did not pass within 10 minutes"
+          exit 1
