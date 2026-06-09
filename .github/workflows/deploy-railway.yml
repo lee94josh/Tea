@@ -38,10 +38,40 @@ jobs:
           # the authoritative auth test is project link/init below.
           railway whoami || echo "(whoami unavailable for this token type — continuing)"
 
+      - name: Detect token type
+        run: |
+          set -euo pipefail
+          API=https://backboard.railway.com/graphql/v2
+          # Account/workspace token? (Authorization: Bearer)
+          R=$(curl -s -X POST "$API" \
+            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"query{projects{edges{node{id name}}}}"}')
+          if echo "$R" | grep -q '"edges"'; then
+            echo "TOKEN_MODE=account" >> "$GITHUB_ENV"
+            echo "token type: account/workspace"
+            exit 0
+          fi
+          # Project token? (Project-Access-Token header, RAILWAY_TOKEN env var)
+          R=$(curl -s -X POST "$API" \
+            -H "Project-Access-Token: $RAILWAY_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"query{projectToken{projectId environmentId}}"}')
+          if echo "$R" | grep -q '"projectId"'; then
+            echo "TOKEN_MODE=project" >> "$GITHUB_ENV"
+            echo "RAILWAY_TOKEN=$RAILWAY_API_TOKEN" >> "$GITHUB_ENV"
+            echo "token type: project-scoped"
+            exit 0
+          fi
+          echo "::error::Railway token rejected as both account and project token. Recreate it at railway.app → Account Settings → Tokens (choose your PERSONAL account, not a workspace) and update the RAILWAY_TOKEN repo secret."
+          exit 1
+
       - name: Create or link project
         run: |
           set -euo pipefail
-          if railway link --project lookback --environment production 2>/dev/null; then
+          if [ "$TOKEN_MODE" = "project" ]; then
+            echo "project token: already scoped to its project/environment"
+          elif railway link --project lookback --environment production 2>/dev/null; then
             echo "linked existing project"
           else
             railway init --name lookback
