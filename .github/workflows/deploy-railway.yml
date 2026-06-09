@@ -1,9 +1,13 @@
 # One-shot Railway deploy, driven entirely by CI so no local Railway access is
 # needed. Requires three repository secrets (Settings → Secrets → Actions):
-#   RAILWAY_TOKEN   — Railway account token (delete it after deploying)
+#   RAILWAY_TOKEN   — Railway account/workspace token (delete after deploying)
 #   GEMINI_API_KEY  — runs vision + seeds + conversation
 #   APP_TOKEN       — the app's login token (you choose it)
-# VAPID keys are generated fresh during the run and stored only in Railway.
+#
+# Control plane goes through Railway's GraphQL API directly (the CLI rejects
+# workspace-scoped tokens); code upload uses `railway up` with a project token
+# minted during the run — Railway's documented CI pattern. VAPID keys are
+# generated fresh in-run and stored only in Railway.
 
 name: deploy-railway
 
@@ -18,6 +22,7 @@ jobs:
     timeout-minutes: 30
     env:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      API: https://backboard.railway.com/graphql/v2
       SVC: lookback
     steps:
       - uses: actions/checkout@v4
@@ -34,91 +39,128 @@ jobs:
           [ -n "${{ secrets.APP_TOKEN }}" ] || { echo "::error::APP_TOKEN secret missing"; exit 1; }
           npm i -g @railway/cli web-push
           railway --version
-          # whoami fails for workspace-scoped tokens even when they're valid;
-          # the authoritative auth test is project link/init below.
-          railway whoami || echo "(whoami unavailable for this token type — continuing)"
 
-      - name: Detect token type
+      - name: Provision project, Postgres, service, volume, variables, domain
         run: |
           set -euo pipefail
-          API=https://backboard.railway.com/graphql/v2
-          # Account/workspace token? (Authorization: Bearer)
-          R=$(curl -s -X POST "$API" \
-            -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"query":"query{projects{edges{node{id name}}}}"}')
-          if echo "$R" | grep -q '"edges"'; then
-            echo "TOKEN_MODE=account" >> "$GITHUB_ENV"
-            echo "token type: account/workspace"
-            exit 0
-          fi
-          # Project token? (Project-Access-Token header, RAILWAY_TOKEN env var)
-          R=$(curl -s -X POST "$API" \
-            -H "Project-Access-Token: $RAILWAY_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"query":"query{projectToken{projectId environmentId}}"}')
-          if echo "$R" | grep -q '"projectId"'; then
-            echo "TOKEN_MODE=project" >> "$GITHUB_ENV"
-            echo "RAILWAY_TOKEN=$RAILWAY_API_TOKEN" >> "$GITHUB_ENV"
-            echo "token type: project-scoped"
-            exit 0
-          fi
-          echo "::error::Railway token rejected as both account and project token. Recreate it at railway.app → Account Settings → Tokens (choose your PERSONAL account, not a workspace) and update the RAILWAY_TOKEN repo secret."
-          exit 1
 
-      - name: Create or link project
-        run: |
-          set -euo pipefail
-          if [ "$TOKEN_MODE" = "project" ]; then
-            echo "project token: already scoped to its project/environment"
-          elif railway link --project lookback --environment production 2>/dev/null; then
-            echo "linked existing project"
+          gql() { # $1 = query, $2 = variables json
+            curl -s -X POST "$API" \
+              -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n --arg q "$1" --argjson v "${2:-null}" '{query:$q, variables:$v}')"
+          }
+          must() { # $1 = response, $2 = jq path, $3 = label
+            local out
+            out=$(echo "$1" | jq -er "$2" 2>/dev/null) || {
+              echo "::error::$3 failed:"; echo "$1" | jq . || echo "$1"; exit 1; }
+            echo "$out"
+          }
+
+          # ---- project (reuse if a 'lookback' project already exists) ----
+          R=$(gql 'query { projects { edges { node { id name environments { edges { node { id name } } } } } } }')
+          PID=$(echo "$R" | jq -r '.data.projects.edges[].node | select(.name=="lookback") | .id' | head -1)
+          if [ -n "$PID" ] && [ "$PID" != "null" ]; then
+            echo "reusing existing project $PID"
+            EID=$(echo "$R" | jq -r '.data.projects.edges[].node | select(.name=="lookback") | .environments.edges[].node | select(.name=="production") | .id' | head -1)
           else
-            railway init --name lookback
+            R=$(gql 'mutation($i: ProjectCreateInput!) { projectCreate(input: $i) { id environments { edges { node { id name } } } } }' \
+                    '{"i":{"name":"lookback"}}')
+            PID=$(must "$R" '.data.projectCreate.id' projectCreate)
+            EID=$(echo "$R" | jq -r '.data.projectCreate.environments.edges[].node | select(.name=="production") | .id' | head -1)
           fi
-          railway status
+          [ -n "$EID" ] || { echo "::error::no production environment found"; exit 1; }
+          echo "project=$PID env=$EID"
 
-      - name: Ensure services (Postgres + app)
-        run: |
-          set -euo pipefail
-          railway add --database postgres || echo "(postgres may already exist)"
-          railway add --service "$SVC" || echo "(service may already exist)"
+          # ---- existing services (idempotent re-runs) ----
+          R=$(gql 'query($id: String!) { project(id: $id) { services { edges { node { id name } } } } }' "{\"id\":\"$PID\"}")
+          PGID=$(echo "$R" | jq -r '.data.project.services.edges[].node | select(.name=="postgres") | .id' | head -1)
+          SID=$(echo "$R" | jq -r ".data.project.services.edges[].node | select(.name==\"$SVC\") | .id" | head -1)
 
-      - name: Configure variables
-        run: |
-          set -euo pipefail
+          # ---- postgres (pgvector image; private-network DNS: postgres.railway.internal) ----
+          if [ -z "$PGID" ] || [ "$PGID" = "null" ]; then
+            PGPW=$(openssl rand -hex 16)
+            PGVARS=$(jq -n --arg pw "$PGPW" '{POSTGRES_USER:"postgres", POSTGRES_PASSWORD:$pw, POSTGRES_DB:"railway", PGDATA:"/var/lib/postgresql/data/pgdata"}')
+            R=$(gql 'mutation($i: ServiceCreateInput!) { serviceCreate(input: $i) { id } }' \
+                    "$(jq -n --arg p "$PID" --argjson v "$PGVARS" '{i:{projectId:$p, name:"postgres", source:{image:"pgvector/pgvector:pg16"}, variables:$v}}')")
+            PGID=$(must "$R" '.data.serviceCreate.id' "serviceCreate(postgres)")
+            R=$(gql 'mutation($i: VolumeCreateInput!) { volumeCreate(input: $i) { id } }' \
+                    "$(jq -n --arg p "$PID" --arg e "$EID" --arg s "$PGID" '{i:{projectId:$p, environmentId:$e, serviceId:$s, mountPath:"/var/lib/postgresql/data"}}')")
+            must "$R" '.data.volumeCreate.id' "volumeCreate(postgres)" >/dev/null
+            echo "DBURL=postgresql://postgres:$PGPW@postgres.railway.internal:5432/railway" >> "$GITHUB_ENV"
+            echo "created postgres $PGID"
+          else
+            # Re-run: recover the password from the postgres service's variables.
+            R=$(gql 'query($p: String!, $e: String!, $s: String!) { variables(projectId: $p, environmentId: $e, serviceId: $s) }' \
+                    "$(jq -n --arg p "$PID" --arg e "$EID" --arg s "$PGID" '{p:$p, e:$e, s:$s}')")
+            PGPW=$(must "$R" '.data.variables.POSTGRES_PASSWORD' "read postgres password")
+            echo "DBURL=postgresql://postgres:$PGPW@postgres.railway.internal:5432/railway" >> "$GITHUB_ENV"
+            echo "reusing postgres $PGID"
+          fi
+
+          # ---- app service ----
+          if [ -z "$SID" ] || [ "$SID" = "null" ]; then
+            R=$(gql 'mutation($i: ServiceCreateInput!) { serviceCreate(input: $i) { id } }' \
+                    "$(jq -n --arg p "$PID" --arg n "$SVC" '{i:{projectId:$p, name:$n}}')")
+            SID=$(must "$R" '.data.serviceCreate.id' "serviceCreate(app)")
+            R=$(gql 'mutation($i: VolumeCreateInput!) { volumeCreate(input: $i) { id } }' \
+                    "$(jq -n --arg p "$PID" --arg e "$EID" --arg s "$SID" '{i:{projectId:$p, environmentId:$e, serviceId:$s, mountPath:"/data"}}')")
+            must "$R" '.data.volumeCreate.id' "volumeCreate(app)" >/dev/null
+            echo "created app service $SID"
+          else
+            echo "reusing app service $SID"
+          fi
+
+          # ---- app variables (VAPID minted fresh; never printed) ----
+          source "$GITHUB_ENV" 2>/dev/null || true
           J=$(web-push generate-vapid-keys --json)
           VPUB=$(echo "$J" | jq -r .publicKey)
           VPRIV=$(echo "$J" | jq -r .privateKey)
-          # Literal Railway reference var (dollar + double-brace) assembled via
-          # printf so Actions' expression parser never sees doubled braces.
-          DBREF=$(printf '$%s%sPostgres.DATABASE_URL%s%s' '{' '{' '}' '}')
-          railway variables --service "$SVC" \
-            --set "APP_TOKEN=${{ secrets.APP_TOKEN }}" \
-            --set "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
-            --set "DATABASE_URL=$DBREF" \
-            --set "STORAGE_DRIVER=disk" \
-            --set "STORAGE_DISK_PATH=/data" \
-            --set "VAPID_PUBLIC_KEY=$VPUB" \
-            --set "VAPID_PRIVATE_KEY=$VPRIV" \
-            --set "VAPID_SUBJECT=mailto:lookback@users.noreply.github.com"
+          APPVARS=$(jq -n \
+            --arg t  "${{ secrets.APP_TOKEN }}" \
+            --arg g  "${{ secrets.GEMINI_API_KEY }}" \
+            --arg db "$DBURL" \
+            --arg vp "$VPUB" --arg vk "$VPRIV" \
+            '{APP_TOKEN:$t, GEMINI_API_KEY:$g, DATABASE_URL:$db,
+              STORAGE_DRIVER:"disk", STORAGE_DISK_PATH:"/data",
+              VAPID_PUBLIC_KEY:$vp, VAPID_PRIVATE_KEY:$vk,
+              VAPID_SUBJECT:"mailto:lookback@users.noreply.github.com"}')
+          R=$(gql 'mutation($i: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $i) }' \
+                  "$(jq -n --arg p "$PID" --arg e "$EID" --arg s "$SID" --argjson kv "$APPVARS" '{i:{projectId:$p, environmentId:$e, serviceId:$s, variables:$kv}}')")
+          echo "$R" | jq -e '.data.variableCollectionUpsert' >/dev/null || { echo "::error::variableCollectionUpsert failed:"; echo "$R" | jq .; exit 1; }
+          echo "variables set"
 
-      - name: Attach volume for photo storage
-        run: |
-          set -euo pipefail
-          railway volume add --mount-path /data --service "$SVC" \
-            || echo "(volume may already exist)"
+          # ---- public domain ----
+          R=$(gql 'query($e: String!, $s: String!) { domains(environmentId: $e, serviceId: $s) { serviceDomains { domain } } }' \
+                  "$(jq -n --arg e "$EID" --arg s "$SID" '{e:$e, s:$s}')")
+          DOMAIN=$(echo "$R" | jq -r '.data.domains.serviceDomains[0].domain // empty')
+          if [ -z "$DOMAIN" ]; then
+            R=$(gql 'mutation($i: ServiceDomainCreateInput!) { serviceDomainCreate(input: $i) { domain } }' \
+                    "$(jq -n --arg e "$EID" --arg s "$SID" '{i:{environmentId:$e, serviceId:$s, targetPort:8080}}')")
+            DOMAIN=$(must "$R" '.data.serviceDomainCreate.domain' serviceDomainCreate)
+          fi
+          echo "domain: https://$DOMAIN"
 
-      - name: Deploy
+          # ---- project token for the code upload ----
+          R=$(gql 'mutation($i: ProjectTokenCreateInput!) { projectTokenCreate(input: $i) }' \
+                  "$(jq -n --arg p "$PID" --arg e "$EID" '{i:{projectId:$p, environmentId:$e, name:"gh-deploy-${{ github.run_id }}"}}')")
+          PT=$(must "$R" '.data.projectTokenCreate' projectTokenCreate)
+          echo "::add-mask::$PT"
+
+          {
+            echo "PROJECT_ID=$PID"
+            echo "ENV_ID=$EID"
+            echo "SERVICE_ID=$SID"
+            echo "DOMAIN=$DOMAIN"
+            echo "RAILWAY_TOKEN=$PT"
+          } >> "$GITHUB_ENV"
+
+      - name: Deploy code (railway up with project token)
         run: railway up --service "$SVC" --detach
 
-      - name: Generate domain and wait for health
+      - name: Wait for health
         run: |
           set -euo pipefail
-          OUT=$(railway domain --service "$SVC")
-          echo "$OUT"
-          DOMAIN=$(echo "$OUT" | grep -oE '[A-Za-z0-9.-]+\.up\.railway\.app' | head -1)
-          [ -n "$DOMAIN" ] || { echo "::error::could not determine domain"; exit 1; }
           echo "app url: https://$DOMAIN"
           for i in $(seq 1 60); do
             CODE=$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/health" || true)

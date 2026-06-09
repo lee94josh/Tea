@@ -14,5 +14,7 @@ dockerfilePath = "Dockerfile"
 [deploy]
 healthcheckPath = "/health"
 healthcheckTimeout = 120
+# Generous retries: first boot races Postgres provisioning and the app
+# intentionally crash-loops (migrate-on-boot) until the DB is reachable.
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 5
+restartPolicyMaxRetries = 10
