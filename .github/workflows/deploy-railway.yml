@@ -34,7 +34,9 @@ jobs:
           [ -n "${{ secrets.APP_TOKEN }}" ] || { echo "::error::APP_TOKEN secret missing"; exit 1; }
           npm i -g @railway/cli web-push
           railway --version
-          railway whoami
+          # whoami fails for workspace-scoped tokens even when they're valid;
+          # the authoritative auth test is project link/init below.
+          railway whoami || echo "(whoami unavailable for this token type — continuing)"
 
       - name: Create or link project
         run: |
