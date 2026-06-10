@@ -37,20 +37,26 @@ async function extractMissing(limit: number): Promise<void> {
     try {
       const topics = await research().extractTopics(m.analysis, m.research, m.venue_name);
       for (const t of topics) {
+        // Global consolidation: one topic per name across ALL moments.
+        const dupe = await query<{ n: string }>(
+          `select count(*)::text as n from discover_topics
+            where lower(name) = lower($1) and name <> '__none__'`,
+          [t.name],
+        );
+        if (Number(dupe.rows[0]?.n ?? '0') > 0) continue;
         await query(
           `insert into discover_topics (moment_id, name, kind, blurb)
-           values ($1,$2,$3,$4) on conflict (moment_id, name) do nothing`,
+           values ($1,$2,$3,$4) on conflict do nothing`,
           [m.id, t.name, t.kind, t.blurb],
         );
       }
-      // Mark extraction attempted even if zero topics, to avoid re-spinning.
-      if (topics.length === 0) {
-        await query(
-          `insert into discover_topics (moment_id, name, kind, blurb)
-           values ($1, '__none__', 'other', null) on conflict do nothing`,
-          [m.id],
-        );
-      }
+      // Always mark extraction attempted (topics may have all deduped away) so
+      // this moment never re-spins the extractor.
+      await query(
+        `insert into discover_topics (moment_id, name, kind, blurb)
+         values ($1, '__none__', 'other', null) on conflict do nothing`,
+        [m.id],
+      );
     } catch (err) {
       console.warn(`[discover] topic extraction failed for ${m.id} (non-fatal):`, err);
     }
@@ -59,9 +65,19 @@ async function extractMissing(limit: number): Promise<void> {
 
 export function discoverRoutes(app: FastifyInstance): void {
   app.get('/discover', { preHandler: requireAuth }, async () => {
-    // Lazily backfill a few moments per request — keeps the page self-populating
-    // without a pipeline change or reprocess.
-    await extractMissing(3);
+    // Keep the request fast: only block on extraction when the page would
+    // otherwise be empty (first visit). Afterwards, backfill in the background
+    // so returning to the view is instant and new topics appear next visit.
+    const existing = await query<{ n: string }>(
+      `select count(*)::text as n from discover_topics where name <> '__none__'`,
+    );
+    if (Number(existing.rows[0]?.n ?? '0') === 0) {
+      await extractMissing(3);
+    } else {
+      void extractMissing(3).catch((err) =>
+        console.warn('[discover] background extraction failed:', err),
+      );
+    }
 
     const rows = await query<{
       id: string;

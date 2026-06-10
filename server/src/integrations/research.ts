@@ -336,13 +336,24 @@ export class GeminiResearch {
     venueName: string | null,
   ): Promise<Array<{ name: string; kind: string; blurb: string }>> {
     const prompt = [
-      'From this photo-moment, list 2-4 TOPICS the person could genuinely learn more about:',
-      'the venue itself, any person/artist/performer involved, artworks, notable dishes or',
-      'cuisine traditions, events, or relevant history. Each topic needs:',
-      '- name: the proper noun or concrete subject',
+      'From this photo-moment, list 1-3 TOPICS the person would genuinely want to learn',
+      'more about. The bar is high — only topics tied to THEIR specific experience:',
+      '- the named venue (restaurant, music hall, museum, bar)',
+      '- a named person: the chef, the artist whose work they saw, the performer they watched',
+      '- a named event (the show/exhibition/festival they attended)',
+      '- the neighborhood, if it is genuinely characterful',
+      '- a signature dish or named artwork they actually encountered',
+      '',
+      'EXCLUDE generic background subjects that would apply to any city photo: fire',
+      'escapes, cast-iron architecture, brownstones, street furniture, generic food',
+      'categories ("bread", "cocktails"), generic concepts ("tasting menus", "live music").',
+      'Test: would a curious friend say "oh, tell me more about THAT"? If it is scenery',
+      'rather than the experience, drop it. Fewer, better topics — zero is acceptable.',
+      '',
+      'Each topic needs:',
+      '- name: the proper noun or concrete named subject',
       '- kind: place | person | artwork | food | event | history | other',
       '- blurb: ONE intriguing sentence grounded in the data below (no invention).',
-      'Prefer specific over generic ("Brooklyn Paramount" not "concert venues").',
       '',
       venueName ? `Venue: ${venueName}` : '',
       `Analysis: ${JSON.stringify(analysis)}`,
@@ -387,7 +398,7 @@ export class GeminiResearch {
             blurb: typeof t.blurb === 'string' ? t.blurb : '',
           }))
           .filter((t) => t.name)
-          .slice(0, 4)
+          .slice(0, 3)
       : [];
   }
 

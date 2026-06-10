@@ -77,6 +77,14 @@ html, body, #root {
   border-radius: 16px; padding: 14px; margin: 10px 0;
 }
 .topiccard:hover { border-color: var(--accent-2); }
+.topiccard.skeleton {
+  height: 84px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-color: transparent;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 button {
   font: inherit;

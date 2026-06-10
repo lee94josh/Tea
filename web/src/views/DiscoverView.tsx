@@ -2,31 +2,49 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { DeepDive, DiscoverTopic } from '@lookback/shared';
 
+// Module-level caches: tab away and back shows instantly (stale-while-
+// revalidate); dives reopen without a network round trip.
+let topicsCache: DiscoverTopic[] | null = null;
+const diveCache = new Map<string, DeepDive>();
+
 /**
  * Discover view: no photos — a learning surface built from the research the
  * app already did. Tap a topic to generate (or reopen) a search-grounded
  * deep dive: the history of the venue, the artist you saw, the dish you ate.
  */
 export function DiscoverView() {
-  const [topics, setTopics] = useState<DiscoverTopic[] | null>(null);
+  const [topics, setTopics] = useState<DiscoverTopic[] | null>(topicsCache);
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState<DiscoverTopic | null>(null);
   const [dive, setDive] = useState<DeepDive | null>(null);
   const [diving, setDiving] = useState(false);
 
   useEffect(() => {
+    // Refresh quietly in the background; the cached list stays on screen.
     api
       .discover()
-      .then(setTopics)
-      .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
+      .then((t) => {
+        topicsCache = t;
+        setTopics(t);
+      })
+      .catch((e) => {
+        if (!topicsCache) setErr(e instanceof Error ? e.message : 'failed');
+      });
   }, []);
 
   async function open(t: DiscoverTopic) {
     setActive(t);
+    const cached = diveCache.get(t.id);
+    if (cached) {
+      setDive(cached);
+      return;
+    }
     setDive(null);
     setDiving(true);
     try {
-      setDive(await api.dive(t.id));
+      const d = await api.dive(t.id);
+      diveCache.set(t.id, d);
+      setDive(d);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'dive failed');
     } finally {
@@ -83,7 +101,17 @@ export function DiscoverView() {
     );
   }
 
-  if (!topics) return <div className="card muted">Gathering what there is to learn…</div>;
+  // First-ever load (no cache yet): quiet skeleton, no copy.
+  if (!topics) {
+    return (
+      <div>
+        <div className="topiccard skeleton" />
+        <div className="topiccard skeleton" />
+        <div className="topiccard skeleton" />
+      </div>
+    );
+  }
+
   if (topics.length === 0)
     return (
       <div className="card muted">

@@ -6,16 +6,24 @@ import type { FeedItem } from '@lookback/shared';
  * Feed view: an Instagram-style photo dump — every photo, newest first, each
  * with a previewable AI comment drawn from the moment's insights.
  */
+// Module-level cache: tabbing away and back shows instantly.
+let feedCache: FeedItem[] | null = null;
+
 export function FeedView() {
-  const [items, setItems] = useState<FeedItem[] | null>(null);
+  const [items, setItems] = useState<FeedItem[] | null>(feedCache);
   const [err, setErr] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     api
       .feed()
-      .then(setItems)
-      .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
+      .then((f) => {
+        feedCache = f;
+        setItems(f);
+      })
+      .catch((e) => {
+        if (!feedCache) setErr(e instanceof Error ? e.message : 'failed');
+      });
   }, []);
 
   function toggle(id: string) {
