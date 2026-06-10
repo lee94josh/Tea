@@ -5,6 +5,7 @@ import type {
   DebugMoment,
   DeepDive,
   DiscoverTopic,
+  FactDive,
   FeedItem,
   FunFact,
   MomentListItem,
@@ -103,6 +104,16 @@ export const api = {
 
   async facts(): Promise<FunFact[]> {
     return json(await fetch(`${BASE}/facts`, { headers: authHeaders() }));
+  },
+
+  async factDive(momentId: string, fact: string, entity?: string | null): Promise<FactDive> {
+    return json(
+      await fetch(`${BASE}/facts/dive`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ momentId, fact, entity: entity ?? null }),
+      }),
+    );
   },
 
   flagFact(momentId: string, fact: string, verdict: 'drop' | 'keep'): void {

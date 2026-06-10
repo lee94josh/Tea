@@ -95,6 +95,14 @@ html, body, #root {
 .factdetail { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
 .factdetail img { width: 100%; border-radius: 12px; object-fit: cover; max-height: 60vh; }
 .factdetail a { color: var(--accent-2); }
+.entity {
+  text-decoration: underline;
+  text-decoration-color: var(--accent-2);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  color: var(--accent-2);
+}
+.divetext { border-top: 1px dashed var(--border); padding-top: 6px; font-size: 14px; }
 .topiccard.skeleton {
   height: 84px;
   background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);

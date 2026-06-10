@@ -69,10 +69,10 @@ Return ONLY JSON: { "angles": [ { "question": "...", "kind": "searchable" } ], "
 
 const RESEARCH_SYSTEM = `You are a meticulous researcher preparing background for a personal conversation about someone's photos. You have Google Search. Verify, don't assume.
 
-RELEVANCE GATE — apply before anything else:
-- This is worth researching only if the moment centers on an EXPERIENCE or place of cultural interest: a restaurant/bar/café, a venue/concert/show/exhibition, a museum or artwork, a landmark or characterful neighborhood, a named person (chef, artist, performer), or travel.
-- If the moment is a mundane everyday scene — a laptop/phone/device on a desk, a screenshot, groceries, a receipt, a generic home or office interior, a product shot — return EMPTY facts and hooks. Do NOT research consumer-electronics brands, warranties (e.g. AppleCare), generic product specs, or everyday-object trivia. Silence is correct for boring moments.
-- A fact must be genuinely interesting: specific, a little obscure, and tied to something that clearly happened here — the kind of tidbit that makes a friend say "oh wow, I didn't know that." Generic encyclopedia background ("X was founded in 1990") only counts if it's surprising. When in doubt, leave it out.
+RELEVANCE GATE:
+- Hard exclusions only: do NOT research consumer-electronics brands, warranties (e.g. AppleCare), generic product specs, or everyday-object trivia from mundane object shots (a laptop/phone on a desk, a screenshot, a receipt). Those produce zero facts.
+- Everything else is fair game: experiences, places, food, people, neighborhoods, events, history — aim for facts that are specific, a little obscure, and tied to something that clearly happened here.
+- When in doubt, INCLUDE the fact — the user reviews the feed and flags misses, and a borderline-interesting fact beats silence. Just keep each one true and sourced.
 
 Your job each pass:
 1. Confirm or correct the venue. If text in the images shows the venue's own name (a menu/receipt/marquee/sign), trust THAT over GPS guesses, and search it to confirm what kind of place it is.
@@ -448,6 +448,91 @@ export class GeminiResearch {
           .filter((t) => t.name)
           .slice(0, 3)
       : [];
+  }
+
+  /**
+   * Fast-first dive on a single fun fact (optionally focused on one entity).
+   * Stage 1: a fast model over the research we ALREADY have + its own
+   * knowledge — instant-feeling. Stage 2 (only if stage 1 says it has nothing
+   * substantive to add): a search-grounded call for fresh information.
+   */
+  async factDive(args: {
+    fact: string;
+    entity?: string | null;
+    venueName: string | null;
+    date: string | null;
+    researchData: MomentResearch | null;
+  }): Promise<{ text: string; usedSearch: boolean }> {
+    const focus = args.entity?.trim();
+    const context = [
+      args.venueName ? `Venue: ${args.venueName}` : '',
+      args.date ? `Date: ${args.date}` : '',
+      args.researchData?.facts?.length
+        ? `Known facts: ${args.researchData.facts.map((f) => f.fact).join(' | ')}`
+        : '',
+      args.researchData?.hooks?.length
+        ? `Angles: ${args.researchData.hooks.join(' | ')}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const prompt = [
+      `FACT: ${args.fact}`,
+      focus ? `FOCUS ON: ${focus} — who/what they are, why they matter, the good stories.` : '',
+      '',
+      'Context already researched:',
+      context || '(none)',
+      '',
+      focus
+        ? 'Write 2-3 short, fascinating paragraphs about the FOCUS subject in relation to this fact.'
+        : 'Write 2-3 short, fascinating paragraphs that go DEEPER into this fact — the story behind it, why it matters, the detail a great docent would add.',
+      'Plain text, no headers, no fluff; every sentence earns its place.',
+      'IMPORTANT: only use the context plus things you are confident you know. If you cannot add anything substantive beyond restating the fact, reply with exactly: INSUFFICIENT',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    // Stage 1: speed is the point here — lite tier first, bigger flash after.
+    const chain = [
+      ...new Set(['gemini-flash-lite-latest', env.gemini.chatModel, 'gemini-flash-latest']),
+    ];
+    for (const model of chain) {
+      try {
+        const res = await this.ai.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: { temperature: 0.6 },
+        });
+        const text = (res.text ?? '').trim();
+        if (!text) continue;
+        if (!/^\s*INSUFFICIENT\s*$/i.test(text)) return { text, usedSearch: false };
+        break; // model answered "insufficient" — escalate to search
+      } catch {
+        /* try next model */
+      }
+    }
+
+    // Stage 2: search-grounded (slower, fresher).
+    const res = await this.ai.models.generateContent({
+      model: env.gemini.visionModel,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: prompt.replace(
+                /IMPORTANT:.*$/s,
+                'Use Google Search to verify and find what is genuinely fascinating.',
+              ),
+            },
+          ],
+        },
+      ],
+      config: { tools: [{ googleSearch: {} }], temperature: 0.5 },
+    });
+    const text = (res.text ?? '').replace(/```(?:json)?/gi, '').trim();
+    return { text, usedSearch: true };
   }
 
   /** Search-grounded deep dive on a topic, in the user's personal context. */

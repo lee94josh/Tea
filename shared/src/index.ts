@@ -288,6 +288,20 @@ export interface DiscoverTopic {
   verdict: 'keep' | 'drop' | null;
 }
 
+/** A notable name inside a fun fact — tappable to learn more. */
+export interface FactEntity {
+  name: string;
+  /** Linked Discover topic when one exists (its dive is instant). */
+  topicId: string | null;
+}
+
+/** `POST /facts/dive` response. */
+export interface FactDive {
+  text: string;
+  /** True when fresh web search was needed (slower path). */
+  usedSearch: boolean;
+}
+
 /** `GET /facts` item — one obscure-but-true tidbit tied to a photo. */
 export interface FunFact {
   id: string;
@@ -301,6 +315,8 @@ export interface FunFact {
   momentTitle: string | null;
   takenAt: string | null;
   thumbUrl: string | null;
+  /** Notable names in the fact, tappable to learn more. */
+  entities: FactEntity[];
 }
 
 /** `POST /discover/:id/dive` — cached search-grounded deep dive. */
