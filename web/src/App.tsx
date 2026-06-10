@@ -6,15 +6,17 @@ import { ConversationView } from './views/ConversationView';
 import { DevView } from './views/DevView';
 import { FeedView } from './views/FeedView';
 import { DiscoverView } from './views/DiscoverView';
+import { FunFactsView } from './views/FunFactsView';
 
 /** Experience views: same photos + insights, different UI shapes. */
-type ViewMode = 'chat' | 'feed' | 'discover';
+type ViewMode = 'chat' | 'feed' | 'discover' | 'facts';
 type Tab = 'view' | 'upload' | 'status' | 'dev';
 
 const VIEW_LABELS: Record<ViewMode, string> = {
   chat: '💬 Chat',
   feed: '📷 Feed',
   discover: '🔭 Discover',
+  facts: '💡 Fun Facts',
 };
 
 export function App() {
@@ -70,6 +72,7 @@ export function App() {
       {tab === 'view' && view === 'chat' && <ConversationView />}
       {tab === 'view' && view === 'feed' && <FeedView />}
       {tab === 'view' && view === 'discover' && <DiscoverView />}
+      {tab === 'view' && view === 'facts' && <FunFactsView />}
       {tab === 'upload' && <UploadView onUploaded={() => setTab('status')} />}
       {tab === 'status' && <StatusView />}
       {tab === 'dev' && <DevView />}

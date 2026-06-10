@@ -282,6 +282,20 @@ export interface DiscoverTopic {
   venueName: string | null;
   momentTitle: string | null;
   hasDive: boolean;
+  /** User relevance feedback: was this worth being here? */
+  verdict: 'keep' | 'drop' | null;
+}
+
+/** `GET /facts` item — one obscure-but-true tidbit tied to a photo. */
+export interface FunFact {
+  id: string;
+  momentId: string;
+  fact: string;
+  source: string | null;
+  venueName: string | null;
+  momentTitle: string | null;
+  takenAt: string | null;
+  thumbUrl: string | null;
 }
 
 /** `POST /discover/:id/dive` — cached search-grounded deep dive. */

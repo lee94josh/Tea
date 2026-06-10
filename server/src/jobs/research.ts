@@ -11,6 +11,7 @@ import { vision } from '../integrations/vision';
 import { storage } from '../storage';
 import { enqueue, JOBS } from '../queue';
 import { env } from '../env';
+import { extractAndStoreTopics } from '../topics';
 
 export interface ResearchJob {
   momentId: string;
@@ -118,6 +119,12 @@ export async function runResearch(data: ResearchJob): Promise<void> {
   } else {
     await query(`update moments set status = 'researched' where id = $1`, [momentId]);
   }
+
+  // Extract Discover topics now (non-fatal) so they're ready the moment the
+  // photo finishes processing — no lazy work on the Discover page.
+  await extractAndStoreTopics(momentId).catch((err) =>
+    console.warn(`[research] topic extraction failed for ${momentId} (non-fatal):`, err),
+  );
 
   await enqueue(JOBS.seedGenerate, { momentId });
 }

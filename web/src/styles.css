@@ -72,11 +72,27 @@ html, body, #root {
 
 /* Discover view */
 .topiccard {
-  display: block; width: 100%; text-align: left;
+  display: flex; align-items: stretch; gap: 8px;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 16px; padding: 14px; margin: 10px 0;
+  border-radius: 16px; padding: 6px 8px 6px 14px; margin: 10px 0;
 }
-.topiccard:hover { border-color: var(--accent-2); }
+.topiccard.dropped { opacity: 0.45; }
+.topicmain { flex: 1; text-align: left; background: none; border: none; padding: 8px 0; }
+.verdicts { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.verdict {
+  width: 34px; height: 34px; padding: 0; border-radius: 999px; font-size: 14px;
+  background: var(--surface-2); color: var(--muted);
+}
+.verdict.on.keep { background: #1f3d2a; color: #7ce8a5; border-color: #2f6e45; }
+.verdict.on.drop { background: #3d1f1f; color: #e87c7c; border-color: #6e2f2f; }
+
+/* Fun Facts view */
+.factcard { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin: 10px 0; overflow: hidden; }
+.factmain { display: block; width: 100%; text-align: left; background: none; border: none; padding: 14px; }
+.facttext { font-size: 15px; line-height: 1.5; }
+.factdetail { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.factdetail img { width: 100%; border-radius: 12px; object-fit: cover; max-height: 60vh; }
+.factdetail a { color: var(--accent-2); }
 .topiccard.skeleton {
   height: 84px;
   background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);

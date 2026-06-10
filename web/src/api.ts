@@ -6,6 +6,7 @@ import type {
   DeepDive,
   DiscoverTopic,
   FeedItem,
+  FunFact,
   MomentListItem,
   NextSeed,
   StartedConversation,
@@ -90,6 +91,18 @@ export const api = {
     return json(
       await fetch(`${BASE}/discover/${topicId}/dive`, { method: 'POST', headers: authHeaders() }),
     );
+  },
+
+  topicVerdict(topicId: string, verdict: 'keep' | 'drop' | null): void {
+    fetch(`${BASE}/discover/${topicId}/verdict`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ verdict }),
+    }).catch(() => {});
+  },
+
+  async facts(): Promise<FunFact[]> {
+    return json(await fetch(`${BASE}/facts`, { headers: authHeaders() }));
   },
 
   async startSeed(seedId: string, opener?: string): Promise<StartedConversation> {

@@ -1,83 +1,28 @@
 /**
- * Discover view — no photos, just learning. Topics are extracted lazily from
- * each researched moment (cached in discover_topics); tapping one triggers a
- * search-grounded deep dive, also cached.
+ * Discover view — no photos, just learning. Topics are extracted in the
+ * pipeline (server/topics.ts) when each moment finishes; this route is a stable
+ * read with a one-time background backfill for pre-pipeline moments.
  *
- *   GET  /discover           — all topics (extracts for new moments on demand)
- *   POST /discover/:id/dive  — generate-or-return the deep dive
+ *   GET  /discover             — all topics (stable order; never blocks)
+ *   POST /discover/:id/dive    — generate-or-return the search-grounded dive
+ *   POST /discover/:id/verdict — keep/drop feedback on a topic's relevance
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { DeepDive, DiscoverTopic, MomentAnalysis, MomentResearch } from '@lookback/shared';
+import type { DeepDive, DiscoverTopic, MomentResearch } from '@lookback/shared';
 import { query } from '../db';
 import { requireAuth } from '../auth';
 import { research } from '../integrations/research';
-import { env } from '../env';
-
-/** Extract topics for moments that have research but no topics yet (bounded). */
-async function extractMissing(limit: number): Promise<void> {
-  if (!env.gemini.apiKey) return;
-  const missing = await query<{
-    id: string;
-    analysis: MomentAnalysis | null;
-    research: MomentResearch | null;
-    venue_name: string | null;
-  }>(`
-    select m.id, m.analysis, m.research, m.venue_name
-      from moments m
-     where m.analysis is not null
-       and m.status in ('researched','seeded')
-       and not exists (select 1 from discover_topics t where t.moment_id = m.id)
-     order by m.created_at desc
-     limit $1
-  `, [limit]);
-
-  for (const m of missing.rows) {
-    if (!m.analysis) continue;
-    try {
-      const topics = await research().extractTopics(m.analysis, m.research, m.venue_name);
-      for (const t of topics) {
-        // Global consolidation: one topic per name across ALL moments.
-        const dupe = await query<{ n: string }>(
-          `select count(*)::text as n from discover_topics
-            where lower(name) = lower($1) and name <> '__none__'`,
-          [t.name],
-        );
-        if (Number(dupe.rows[0]?.n ?? '0') > 0) continue;
-        await query(
-          `insert into discover_topics (moment_id, name, kind, blurb)
-           values ($1,$2,$3,$4) on conflict do nothing`,
-          [m.id, t.name, t.kind, t.blurb],
-        );
-      }
-      // Always mark extraction attempted (topics may have all deduped away) so
-      // this moment never re-spins the extractor.
-      await query(
-        `insert into discover_topics (moment_id, name, kind, blurb)
-         values ($1, '__none__', 'other', null) on conflict do nothing`,
-        [m.id],
-      );
-    } catch (err) {
-      console.warn(`[discover] topic extraction failed for ${m.id} (non-fatal):`, err);
-    }
-  }
-}
+import { backfillTopics } from '../topics';
 
 export function discoverRoutes(app: FastifyInstance): void {
   app.get('/discover', { preHandler: requireAuth }, async () => {
-    // Keep the request fast: only block on extraction when the page would
-    // otherwise be empty (first visit). Afterwards, backfill in the background
-    // so returning to the view is instant and new topics appear next visit.
-    const existing = await query<{ n: string }>(
-      `select count(*)::text as n from discover_topics where name <> '__none__'`,
+    // Never block the page on extraction. Backfill any pre-pipeline moments in
+    // the background; the list stays stable (ordered by moment, not topic age)
+    // and converges so repeat visits show the same thing.
+    void backfillTopics(30).catch((err) =>
+      console.warn('[discover] background backfill failed:', err),
     );
-    if (Number(existing.rows[0]?.n ?? '0') === 0) {
-      await extractMissing(3);
-    } else {
-      void extractMissing(3).catch((err) =>
-        console.warn('[discover] background extraction failed:', err),
-      );
-    }
 
     const rows = await query<{
       id: string;
@@ -86,14 +31,15 @@ export function discoverRoutes(app: FastifyInstance): void {
       kind: string | null;
       blurb: string | null;
       deep: unknown;
+      verdict: string | null;
       venue_name: string | null;
       title: string | null;
     }>(`
-      select t.id, t.moment_id, t.name, t.kind, t.blurb, t.deep,
+      select t.id, t.moment_id, t.name, t.kind, t.blurb, t.deep, t.verdict,
              m.venue_name, m.title
         from discover_topics t join moments m on m.id = t.moment_id
        where t.name <> '__none__'
-       order by t.created_at desc
+       order by m.created_at desc, t.name asc
     `);
 
     const topics: DiscoverTopic[] = rows.rows.map((r) => ({
@@ -105,6 +51,7 @@ export function discoverRoutes(app: FastifyInstance): void {
       venueName: r.venue_name,
       momentTitle: r.title,
       hasDive: r.deep != null,
+      verdict: (r.verdict as DiscoverTopic['verdict']) ?? null,
     }));
     return topics;
   });
@@ -156,6 +103,36 @@ export function discoverRoutes(app: FastifyInstance): void {
         ]);
       }
       return reply.send(dive);
+    },
+  );
+
+  // Relevance feedback: keep / drop / clear. Persisted on the topic (so the UI
+  // reflects it) and logged to `feedback` for prompt-tuning data.
+  app.post<{ Params: { id: string }; Body: { verdict: 'keep' | 'drop' | null } }>(
+    '/discover/:id/verdict',
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const verdict = req.body?.verdict ?? null;
+      if (verdict !== 'keep' && verdict !== 'drop' && verdict !== null) {
+        return reply.code(400).send({ error: 'verdict must be keep | drop | null' });
+      }
+      const row = (
+        await query<{ name: string; kind: string | null; moment_id: string }>(
+          'select name, kind, moment_id from discover_topics where id = $1',
+          [req.params.id],
+        )
+      ).rows[0];
+      if (!row) return reply.code(404).send({ error: 'topic not found' });
+
+      await query('update discover_topics set verdict = $2 where id = $1', [
+        req.params.id,
+        verdict,
+      ]);
+      await query(
+        `insert into feedback (kind, payload) values ('topic_relevance', $1)`,
+        [JSON.stringify({ topicId: req.params.id, name: row.name, kind: row.kind, verdict })],
+      );
+      return reply.send({ ok: true });
     },
   );
 }

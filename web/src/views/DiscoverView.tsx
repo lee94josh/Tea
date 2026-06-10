@@ -18,6 +18,13 @@ export function DiscoverView() {
   const [active, setActive] = useState<DiscoverTopic | null>(null);
   const [dive, setDive] = useState<DeepDive | null>(null);
   const [diving, setDiving] = useState(false);
+  const [verdicts, setVerdicts] = useState<Record<string, 'keep' | 'drop' | null>>({});
+
+  function setVerdict(id: string, v: 'keep' | 'drop') {
+    const next = verdicts[id] === v ? null : v; // tapping again clears
+    setVerdicts((s) => ({ ...s, [id]: next }));
+    api.topicVerdict(id, next);
+  }
 
   useEffect(() => {
     // Refresh quietly in the background; the cached list stays on screen.
@@ -124,19 +131,40 @@ export function DiscoverView() {
       <p className="small muted" style={{ padding: '0 4px' }}>
         things your photos opened the door to:
       </p>
-      {topics.map((t) => (
-        <button key={t.id} className="topiccard" onClick={() => open(t)}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-            <strong>{t.name}</strong>
-            <span className="pill">{t.kind ?? 'topic'}</span>
+      {topics.map((t) => {
+        const v = verdicts[t.id] ?? t.verdict;
+        return (
+          <div key={t.id} className={`topiccard ${v === 'drop' ? 'dropped' : ''}`}>
+            <button className="topicmain" onClick={() => open(t)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <strong>{t.name}</strong>
+                <span className="pill">{t.kind ?? 'topic'}</span>
+              </div>
+              {t.blurb && <div className="small" style={{ marginTop: 4 }}>{t.blurb}</div>}
+              <div className="small muted" style={{ marginTop: 4 }}>
+                {t.venueName ?? t.momentTitle ?? ''}
+                {t.hasDive ? ' · ✓ researched' : ' · tap to research'}
+              </div>
+            </button>
+            <div className="verdicts">
+              <button
+                className={`verdict ${v === 'keep' ? 'on keep' : ''}`}
+                aria-label="worth keeping"
+                onClick={() => setVerdict(t.id, 'keep')}
+              >
+                ✓
+              </button>
+              <button
+                className={`verdict ${v === 'drop' ? 'on drop' : ''}`}
+                aria-label="not relevant"
+                onClick={() => setVerdict(t.id, 'drop')}
+              >
+                ✕
+              </button>
+            </div>
           </div>
-          {t.blurb && <div className="small" style={{ marginTop: 4 }}>{t.blurb}</div>}
-          <div className="small muted" style={{ marginTop: 4 }}>
-            {t.venueName ?? t.momentTitle ?? ''}
-            {t.hasDive ? ' · ✓ researched' : ' · tap to research'}
-          </div>
-        </button>
-      ))}
+        );
+      })}
     </div>
   );
 }

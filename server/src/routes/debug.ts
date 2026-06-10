@@ -14,7 +14,8 @@ import { toMoment } from '../serialize';
 
 export function debugRoutes(app: FastifyInstance): void {
   app.get('/debug/moments', { preHandler: requireAuth }, async () => {
-    const moments = await query('select * from moments order by started_at desc nulls last');
+    // Newest-processed first, so a fresh upload's moments appear at the top.
+    const moments = await query('select * from moments order by created_at desc');
 
     const out: DebugMoment[] = [];
     for (const mRow of moments.rows) {

@@ -45,28 +45,28 @@ export async function runCheckCluster(): Promise<void> {
     `select count(*)::text as n from photos
        where is_screenshot = false and ingest_status not in ('done','error')`,
   );
-  if (Number(pending.rows[0]?.n ?? '0') > 0) return; // not ready yet
+  if (Number(pending.rows[0]?.n ?? '0') > 0) return; // a batch is still processing
 
-  const existing = await query<{ n: string }>('select count(*)::text as n from moments');
-  if (Number(existing.rows[0]?.n ?? '0') > 0) return; // already clustered
-
-  const anyPhotos = await query<{ n: string }>(
-    `select count(*)::text as n from photos where is_screenshot = false and ingest_status = 'done'`,
+  // Incremental: cluster any photos that are done but not yet in a moment.
+  const unclustered = await query<{ n: string }>(
+    `select count(*)::text as n from photos p
+       where p.is_screenshot = false and p.ingest_status = 'done'
+         and not exists (select 1 from moment_photos mp where mp.photo_id = p.id)`,
   );
-  if (Number(anyPhotos.rows[0]?.n ?? '0') === 0) return; // nothing to do
+  if (Number(unclustered.rows[0]?.n ?? '0') === 0) return; // nothing new to cluster
 
   await enqueue(JOBS.clusterMoments, {}, { singletonKey: 'cluster-run' });
 }
 
 export async function runClusterMoments(): Promise<void> {
-  // Re-check idempotency inside the run.
-  const existing = await query<{ n: string }>('select count(*)::text as n from moments');
-  if (Number(existing.rows[0]?.n ?? '0') > 0) return;
-
+  // Only the photos not already assigned to a moment — so new uploads form new
+  // moments without disturbing existing ones (incremental, idempotent).
   const res = await query<PhotoRow>(
-    `select id, taken_at, lat, lng from photos
-       where is_screenshot = false and ingest_status = 'done'`,
+    `select p.id, p.taken_at, p.lat, p.lng from photos p
+       where p.is_screenshot = false and p.ingest_status = 'done'
+         and not exists (select 1 from moment_photos mp where mp.photo_id = p.id)`,
   );
+  if (res.rows.length === 0) return;
 
   const timestamped = res.rows
     .filter((r) => r.taken_at)
