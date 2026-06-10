@@ -8,13 +8,14 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
-import type { MomentAnalysis, Message, SeedDraft } from '@lookback/shared';
+import type { MomentAnalysis, MomentResearch, Message, SeedDraft } from '@lookback/shared';
 import { env } from '../env';
 
 export interface SeedContext {
   analysis: MomentAnalysis;
   venueName?: string | null;
   date?: string | null;
+  research?: MomentResearch | null;
 }
 
 export interface ConversationImage {
@@ -26,6 +27,7 @@ export interface ConversationContext {
   analysis: MomentAnalysis | null;
   venueName?: string | null;
   date?: string | null;
+  research?: MomentResearch | null;
   images: ConversationImage[];
   history: Pick<Message, 'role' | 'content'>[];
 }
@@ -46,6 +48,8 @@ Return JSON: { "opener": string, "suggested_replies": string[3], "quality_score"
 
 Rules:
 - The opener MUST reference concrete specifics from the moment (the venue, an activity, a notable detail, a food, legible text). A generic opener ("looks like you had fun!") is a failure. casual ≠ vague.
+- If a Place is known, NEVER ask where it is — talk like you know the spot ("honeysuckle for the birthday? strong choice"). Asking "what spot is this?" when the place is given is a failure.
+- If verified research facts/hooks are provided, ground the opener in the most interesting one — knowing something real about the place or moment is what makes this feel like magic. Don't ask about things the research already answers.
 - The opener is your first TEXT about this moment: all lowercase, casual like texting a friend, short (one or two lines), ending in one genuine, specific question. a reaction + question is great too ("wait is that the spot on bedford? what'd you get?"). no flattery, no assistant-speak, barely any emoji.
 - suggested_replies are THREE genuine branches the user could pick, written as the USER texting back — also lowercase and casual:
     1. one that goes deeper into the moment,
@@ -67,6 +71,9 @@ how you talk:
   instead of always asking.
 - reference what's actually in the photos and what you know (the place, the date).
   notice concrete, specific details.
+- you may be given verified background facts about the place/moment — drop them in
+  naturally, like a friend who happens to know the spot. never ask where something
+  is if the place is already known; never ask things the facts already answer.
 - no flattery, no therapy-speak, no assistant-speak, and don't narrate what you're
   doing. barely any emoji — let the words carry it.
 - let them lead; follow whatever they seem into.
@@ -86,11 +93,21 @@ function contextBlock(
   analysis: MomentAnalysis | null,
   venueName?: string | null,
   date?: string | null,
+  research?: MomentResearch | null,
 ): string {
   const lines = ['Here is what I know about this moment:'];
   if (venueName) lines.push(`Place: ${venueName}`);
   if (date) lines.push(`Date: ${date}`);
   if (analysis) lines.push(`Analysis: ${JSON.stringify(analysis)}`);
+  if (research && (research.facts.length || research.hooks.length)) {
+    lines.push(
+      'Verified research (from web search — safe to treat as known):',
+      ...research.facts.map((f) => `- ${f.fact}${f.source ? ` [${f.source}]` : ''}`),
+    );
+    if (research.hooks.length) {
+      lines.push('Conversation-worthy angles:', ...research.hooks.map((h) => `- ${h}`));
+    }
+  }
   return lines.join('\n');
 }
 
@@ -103,7 +120,7 @@ function transcript(history: Pick<Message, 'role' | 'content'>[]): string {
 
 function suggestPrompt(ctx: ConversationContext): string {
   return [
-    contextBlock(ctx.analysis, ctx.venueName, ctx.date),
+    contextBlock(ctx.analysis, ctx.venueName, ctx.date, ctx.research),
     '',
     'the conversation so far:',
     transcript(ctx.history),
@@ -136,7 +153,7 @@ export class AnthropicLlm implements LlmClient {
       messages: [
         {
           role: 'user',
-          content: contextBlock(ctx.analysis, ctx.venueName, ctx.date),
+          content: contextBlock(ctx.analysis, ctx.venueName, ctx.date, ctx.research),
         },
       ],
     });
@@ -156,7 +173,7 @@ export class AnthropicLlm implements LlmClient {
     const messages: Anthropic.MessageParam[] = [];
 
     const firstUserContent: Anthropic.ContentBlockParam[] = [
-      { type: 'text', text: contextBlock(ctx.analysis, ctx.venueName, ctx.date) },
+      { type: 'text', text: contextBlock(ctx.analysis, ctx.venueName, ctx.date, ctx.research) },
     ];
     for (const img of ctx.images.slice(0, 8)) {
       firstUserContent.push({
@@ -248,7 +265,7 @@ export class GeminiLlm implements LlmClient {
     const res = await this.ai.models.generateContent({
       model: env.gemini.visionModel, // seeds are background work: use the pro model
       contents: [
-        { role: 'user', parts: [{ text: contextBlock(ctx.analysis, ctx.venueName, ctx.date) }] },
+        { role: 'user', parts: [{ text: contextBlock(ctx.analysis, ctx.venueName, ctx.date, ctx.research) }] },
       ],
       config: {
         systemInstruction: SEED_SYSTEM,
@@ -267,7 +284,7 @@ export class GeminiLlm implements LlmClient {
     // Context + images ride on a synthetic first user turn, mirroring the
     // Anthropic provider so history replays identically.
     const firstParts: Array<Record<string, unknown>> = [
-      { text: contextBlock(ctx.analysis, ctx.venueName, ctx.date) },
+      { text: contextBlock(ctx.analysis, ctx.venueName, ctx.date, ctx.research) },
     ];
     for (const img of ctx.images.slice(0, 8)) {
       firstParts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });

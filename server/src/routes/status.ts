@@ -44,7 +44,7 @@ export function statusRoutes(app: FastifyInstance): void {
 
     const momentRow = await query<{ total: string; analyzed: string }>(`
       select count(*)::text as total,
-             count(*) filter (where status in ('analyzed','seeded'))::text as analyzed
+             count(*) filter (where status in ('analyzed','researched','seeded'))::text as analyzed
       from moments
     `);
     const seedRow = await query<{ total: string; ready: string }>(`

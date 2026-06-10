@@ -55,6 +55,15 @@ export async function runAnalyze(data: AnalyzeJob): Promise<void> {
     [momentId],
   );
 
+  // Nearby venue candidates from GPS — vision disambiguates by what's visible.
+  const candidates = await query<{ name: string | null; category: string | null }>(
+    `select distinct v.name, v.category
+       from moment_photos mp join venues v on v.photo_id = mp.photo_id
+       where mp.moment_id = $1 and v.name is not null
+       limit 8`,
+    [momentId],
+  );
+
   const images = [];
   for (const row of photos.rows) {
     if (!row.vision_key) continue;
@@ -72,14 +81,22 @@ export async function runAnalyze(data: AnalyzeJob): Promise<void> {
       date: humanDate(m.started_at),
       lat: m.lat,
       lng: m.lng,
+      venueCandidates: candidates.rows,
     });
 
+    // Vision's visually-grounded venue pick beats the raw "closest place" name.
+    const guess = analysis.venue_guess;
+    const venueName =
+      guess?.name && guess.confidence >= 0.5 ? guess.name : m.venue_name;
+
     await query(
-      `update moments set title = $2, analysis = $3, status = 'analyzed' where id = $1`,
-      [momentId, analysis.title, JSON.stringify(analysis)],
+      `update moments set title = $2, analysis = $3, venue_name = $4, status = 'analyzed'
+        where id = $1`,
+      [momentId, analysis.title, JSON.stringify(analysis), venueName],
     );
 
-    await enqueue(JOBS.seedGenerate, { momentId });
+    // Research before seeding — slow is fine, the pipeline is async.
+    await enqueue(JOBS.researchMoment, { momentId });
   } catch (err) {
     await query(`update moments set status = 'error' where id = $1`, [momentId]);
     throw err;

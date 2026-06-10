@@ -59,6 +59,11 @@ export const env = {
     embedDim: num('EMBED_DIM', 1408),
   },
 
+  research: {
+    /** Search-grounded research passes per moment (0 disables the loop). */
+    passes: num('RESEARCH_PASSES', 2),
+  },
+
   anthropic: {
     apiKey: opt('ANTHROPIC_API_KEY'),
     model: opt('ANTHROPIC_MODEL', 'claude-opus-4-8'),

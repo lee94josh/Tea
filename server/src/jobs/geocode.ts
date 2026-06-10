@@ -20,8 +20,9 @@ export async function runGeocode(data: GeocodeJob): Promise<void> {
   const candidates = await geocode().nearbyVenues(lat, lng);
   if (candidates.length === 0) return;
 
-  // Store top candidates (cap a few) for the clustering step to pick from.
-  for (const c of candidates.slice(0, 3)) {
+  // Store top candidates — clustering picks the venue name, and the vision
+  // model gets the full list to disambiguate against what's in the photo.
+  for (const c of candidates.slice(0, 6)) {
     await query(
       `insert into venues (photo_id, name, category, address, place_id, confidence, source)
        values ($1,$2,$3,$4,$5,$6,$7)`,

@@ -6,7 +6,7 @@
  * Single-photo moments get a small quality penalty (>=2 photos preferred).
  */
 
-import type { MomentAnalysis } from '@lookback/shared';
+import type { MomentAnalysis, MomentResearch } from '@lookback/shared';
 import { query } from '../db';
 import { llm } from '../integrations/llm';
 import { enqueue, JOBS } from '../queue';
@@ -22,7 +22,8 @@ export async function runSeed(data: SeedJob): Promise<void> {
     analysis: MomentAnalysis | null;
     venue_name: string | null;
     started_at: string | null;
-  }>('select analysis, venue_name, started_at from moments where id = $1', [momentId]);
+    research: MomentResearch | null;
+  }>('select analysis, venue_name, started_at, research from moments where id = $1', [momentId]);
   const m = moment.rows[0];
   if (!m || !m.analysis) return;
 
@@ -45,6 +46,7 @@ export async function runSeed(data: SeedJob): Promise<void> {
       analysis: m.analysis,
       venueName: m.venue_name,
       date,
+      research: m.research,
     });
 
     if (!draft.opener) {

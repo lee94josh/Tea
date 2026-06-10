@@ -13,6 +13,7 @@ export function toMoment(r: Record<string, unknown>): Moment {
     lat: (r.lat as number) ?? null,
     lng: (r.lng as number) ?? null,
     analysis: (r.analysis as Moment['analysis']) ?? null,
+    research: (r.research as Moment['research']) ?? null,
     status: r.status as Moment['status'],
     createdAt: new Date(r.created_at as string).toISOString(),
   };

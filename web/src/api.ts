@@ -2,6 +2,7 @@
 
 import type {
   ConversationHistory,
+  DebugMoment,
   MomentListItem,
   NextSeed,
   StartedConversation,
@@ -64,6 +65,10 @@ export const api = {
 
   async listMoments(): Promise<MomentListItem[]> {
     return json(await fetch(`${BASE}/moments`, { headers: authHeaders() }));
+  },
+
+  async debugMoments(): Promise<DebugMoment[]> {
+    return json(await fetch(`${BASE}/debug/moments`, { headers: authHeaders() }));
   },
 
   async startSeed(seedId: string): Promise<StartedConversation> {

@@ -3,8 +3,9 @@ import { getToken, setToken } from './api';
 import { UploadView } from './views/UploadView';
 import { StatusView } from './views/StatusView';
 import { ConversationView } from './views/ConversationView';
+import { DevView } from './views/DevView';
 
-type Tab = 'talk' | 'upload' | 'status';
+type Tab = 'talk' | 'upload' | 'status' | 'dev';
 
 export function App() {
   const [token, setTok] = useState(getToken());
@@ -32,12 +33,16 @@ export function App() {
           >
             Status
           </button>
+          <button className={`tab ${tab === 'dev' ? 'active' : ''}`} onClick={() => setTab('dev')}>
+            Dev
+          </button>
         </div>
       </div>
 
       {tab === 'talk' && <ConversationView />}
       {tab === 'upload' && <UploadView onUploaded={() => setTab('status')} />}
       {tab === 'status' && <StatusView />}
+      {tab === 'dev' && <DevView />}
     </div>
   );
 }

@@ -20,7 +20,7 @@ export const INGEST_STATUSES = [
 ] as const;
 export type IngestStatus = (typeof INGEST_STATUSES)[number];
 
-export const MOMENT_STATUSES = ['pending', 'analyzed', 'seeded', 'error'] as const;
+export const MOMENT_STATUSES = ['pending', 'analyzed', 'researched', 'seeded', 'error'] as const;
 export type MomentStatus = (typeof MOMENT_STATUSES)[number];
 
 export const SEED_STATUSES = ['unused', 'started', 'done'] as const;
@@ -70,6 +70,7 @@ export interface Moment {
   lat: number | null;
   lng: number | null;
   analysis: MomentAnalysis | null;
+  research: MomentResearch | null;
   status: MomentStatus;
   createdAt: string;
 }
@@ -112,6 +113,29 @@ export interface MomentAnalysis {
   text_in_images: string[];
   mood: string;
   notable: string[];
+  /** Vision's pick among nearby venue candidates, judged from what's visible. */
+  venue_guess?: {
+    name: string | null;
+    confidence: number; // 0-1
+    reasoning: string;
+  } | null;
+}
+
+/** One verified finding from the background research loop. */
+export interface ResearchFact {
+  fact: string;
+  source?: string;
+}
+
+/** Output of the `research:moment` step (search-grounded enrichment). */
+export interface MomentResearch {
+  venue: { name: string | null; confidence: number; evidence: string } | null;
+  facts: ResearchFact[];
+  /** Specific conversation-worthy angles surfaced by research. */
+  hooks: string[];
+  /** Unresolved questions — input for the next research pass. */
+  open_questions: string[];
+  passes: number;
 }
 
 /** Output of the `seed:generate` step (reasoning LLM). */
@@ -203,4 +227,43 @@ export interface ConversationHistory {
   messages: Message[];
   moment: Moment | null;
   photos: PhotoRef[];
+}
+
+// ---------------------------------------------------------------------------
+// Dev / prototyping mode (`GET /debug/moments`)
+// ---------------------------------------------------------------------------
+
+export interface DebugVenueCandidate {
+  name: string | null;
+  category: string | null;
+  address: string | null;
+  confidence: number | null;
+  source: string | null;
+}
+
+export interface DebugPhoto {
+  id: string;
+  thumbUrl: string | null;
+  takenAt: string | null;
+  lat: number | null;
+  lng: number | null;
+  cameraMake: string | null;
+  cameraModel: string | null;
+  width: number | null;
+  height: number | null;
+  isScreenshot: boolean;
+  ingestStatus: IngestStatus;
+  venues: DebugVenueCandidate[];
+}
+
+/** Everything the app knows/inferred about one moment — for the dev view. */
+export interface DebugMoment {
+  moment: Moment;
+  photos: DebugPhoto[];
+  seed: {
+    opener: string;
+    suggestedReplies: string[];
+    qualityScore: number | null;
+    status: SeedStatus;
+  } | null;
 }

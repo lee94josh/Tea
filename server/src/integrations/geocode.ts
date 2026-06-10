@@ -131,10 +131,103 @@ export class NominatimGeocode implements GeocodeClient {
   }
 }
 
+/**
+ * Keyless POI candidates via OpenStreetMap Overpass: named food/drink/leisure
+ * places within ~120m. This is what makes "which restaurant is this sandwich
+ * from?" answerable without a Places key — the candidates get handed to the
+ * vision model, which picks by matching what's actually in the photo.
+ */
+export class OverpassGeocode implements GeocodeClient {
+  private fallback = new NominatimGeocode();
+
+  async nearbyVenues(lat: number, lng: number): Promise<VenueCandidate[]> {
+    let pois: VenueCandidate[] = [];
+    try {
+      pois = await this.pois(lat, lng);
+    } catch (err) {
+      console.warn('[geocode] overpass failed, falling back to reverse:', err);
+    }
+    // Always include the reverse-geocode hit too (address context + sometimes
+    // the building POI itself).
+    let reverse: VenueCandidate[] = [];
+    try {
+      reverse = await this.fallback.nearbyVenues(lat, lng);
+    } catch {
+      /* fine */
+    }
+    return [...pois, ...reverse].slice(0, 8);
+  }
+
+  private async pois(lat: number, lng: number): Promise<VenueCandidate[]> {
+    const around = `around:120,${lat},${lng}`;
+    const q = `
+      [out:json][timeout:10];
+      (
+        nwr[name][amenity~"^(restaurant|cafe|bar|fast_food|pub|ice_cream|bakery|food_court|biergarten)$"](${around});
+        nwr[name][shop~"^(bakery|deli|coffee|convenience)$"](${around});
+        nwr[name][tourism~"^(attraction|museum|gallery)$"](${around});
+      );
+      out center 12;
+    `;
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'lookback/0.1 (personal photo app; single user)',
+      },
+      body: `data=${encodeURIComponent(q)}`,
+    });
+    if (!res.ok) throw new Error(`overpass ${res.status}`);
+    const data = (await res.json()) as {
+      elements?: Array<{
+        id: number;
+        type: string;
+        lat?: number;
+        lon?: number;
+        center?: { lat: number; lon: number };
+        tags?: Record<string, string>;
+      }>;
+    };
+    const els = data.elements ?? [];
+    return els
+      .filter((e) => e.tags?.name)
+      .map((e) => {
+        const plat = e.lat ?? e.center?.lat;
+        const plng = e.lon ?? e.center?.lon;
+        const dist =
+          plat != null && plng != null ? haversineMeters(lat, lng, plat, plng) : 120;
+        return {
+          name: e.tags!.name ?? null,
+          category:
+            e.tags!.amenity ?? e.tags!.shop ?? e.tags!.tourism ?? e.tags!.cuisine ?? null,
+          address: [e.tags!['addr:housenumber'], e.tags!['addr:street']]
+            .filter(Boolean)
+            .join(' ') || null,
+          placeId: `${e.type}/${e.id}`,
+          // Closer = more confident; 0m → 0.9, 120m → ~0.3.
+          confidence: Math.max(0.3, 0.9 - dist / 200),
+          source: 'overpass',
+        };
+      })
+      .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  }
+}
+
+function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 let _geo: GeocodeClient | null = null;
 export function geocode(): GeocodeClient {
   if (!_geo) {
-    _geo = env.googlePlaces.apiKey ? new GooglePlaces() : new NominatimGeocode();
+    _geo = env.googlePlaces.apiKey ? new GooglePlaces() : new OverpassGeocode();
   }
   return _geo;
 }

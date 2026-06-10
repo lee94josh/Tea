@@ -16,6 +16,8 @@ export interface MomentGrounding {
   date?: string | null; // human-readable
   lat?: number | null;
   lng?: number | null;
+  /** Nearby place candidates from GPS — vision picks by visual evidence. */
+  venueCandidates?: Array<{ name: string | null; category: string | null }>;
 }
 
 export interface VisionImage {
@@ -38,6 +40,16 @@ const ANALYSIS_SCHEMA = {
     text_in_images: { type: 'array', items: { type: 'string' } },
     mood: { type: 'string' },
     notable: { type: 'array', items: { type: 'string' } },
+    venue_guess: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        name: { type: 'string', nullable: true },
+        confidence: { type: 'number' },
+        reasoning: { type: 'string' },
+      },
+      required: ['name', 'confidence', 'reasoning'],
+    },
   },
   required: [
     'title',
@@ -58,14 +70,27 @@ function groundingText(g: MomentGrounding): string {
       ? `near ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`
       : 'at an unknown location';
   const when = g.date ? ` on ${g.date}` : '';
-  return [
+  const lines = [
     `These photos were all taken ${where}${when}. They are from a single moment/event.`,
     'Describe what is happening as one coherent scene — not photo by photo.',
     'Anchor on the facts above and on what is actually visible. Do NOT invent a venue,',
     'people, or details you cannot see. If unsure, leave the relevant field empty.',
     'Read any legible text (signs, menus, labels) into text_in_images.',
-    'Return ONLY JSON matching the provided schema.',
-  ].join(' ');
+  ];
+  if (g.venueCandidates && g.venueCandidates.length > 0) {
+    const list = g.venueCandidates
+      .filter((c) => c.name)
+      .map((c) => `${c.name}${c.category ? ` (${c.category})` : ''}`)
+      .join('; ');
+    lines.push(
+      `GPS says these places are within ~120m: ${list}.`,
+      'Judge from VISUAL evidence (food style, packaging, signage, interior, vibe) which',
+      'one this moment most likely happened at, and fill venue_guess with your pick,',
+      'a 0-1 confidence, and one line of reasoning. If none fit, set name to null.',
+    );
+  }
+  lines.push('Return ONLY JSON matching the provided schema.');
+  return lines.join(' ');
 }
 
 export class GeminiVision implements VisionClient {
@@ -98,6 +123,17 @@ function normalizeAnalysis(raw: unknown): MomentAnalysis {
   const o = (raw ?? {}) as Record<string, unknown>;
   const arr = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
+  let venueGuess: MomentAnalysis['venue_guess'] = null;
+  if (o.venue_guess && typeof o.venue_guess === 'object') {
+    const g = o.venue_guess as Record<string, unknown>;
+    venueGuess = {
+      name: typeof g.name === 'string' && g.name.trim() ? g.name : null,
+      confidence: typeof g.confidence === 'number' ? Math.min(1, Math.max(0, g.confidence)) : 0,
+      reasoning: typeof g.reasoning === 'string' ? g.reasoning : '',
+    };
+  }
+
   return {
     title: typeof o.title === 'string' ? o.title : 'Untitled moment',
     summary: typeof o.summary === 'string' ? o.summary : '',
@@ -107,6 +143,7 @@ function normalizeAnalysis(raw: unknown): MomentAnalysis {
     text_in_images: arr(o.text_in_images),
     mood: typeof o.mood === 'string' ? o.mood : '',
     notable: arr(o.notable),
+    venue_guess: venueGuess,
   };
 }
 

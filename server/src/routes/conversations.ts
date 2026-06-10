@@ -8,7 +8,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import type { ConversationHistory, MomentAnalysis } from '@lookback/shared';
+import type { ConversationHistory, MomentAnalysis, MomentResearch } from '@lookback/shared';
 import { query } from '../db';
 import { storage } from '../storage';
 import { llm } from '../integrations/llm';
@@ -100,6 +100,7 @@ export function conversationRoutes(app: FastifyInstance): void {
       // Assemble context.
       const momentRow = await momentForConversation(convRow);
       const analysis = (momentRow?.analysis ?? null) as MomentAnalysis | null;
+      const researchData = (momentRow?.research ?? null) as MomentResearch | null;
       const venueName = (momentRow?.venue_name as string | null) ?? null;
       const date = momentRow?.started_at
         ? new Date(momentRow.started_at as string).toLocaleDateString('en-US', {
@@ -140,7 +141,7 @@ export function conversationRoutes(app: FastifyInstance): void {
       let full = '';
       try {
         full = await llm().streamConversation(
-          { analysis, venueName, date, images, history: historyRes.rows },
+          { analysis, venueName, date, research: researchData, images, history: historyRes.rows },
           (delta) => send('delta', { text: delta }),
         );
       } catch (err) {
@@ -163,6 +164,7 @@ export function conversationRoutes(app: FastifyInstance): void {
           analysis,
           venueName,
           date,
+          research: researchData,
           images: [],
           history: [...historyRes.rows, { role: 'assistant', content: full }],
         });

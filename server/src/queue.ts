@@ -14,6 +14,7 @@ export const JOBS = {
   embed: 'ingest:embed',
   clusterMoments: 'cluster:moments',
   analyzeMoment: 'analyze:moment',
+  researchMoment: 'research:moment',
   seedGenerate: 'seed:generate',
   notifyPush: 'notify:push',
   // Coordinators that fire batch stages once per-item work completes.
