@@ -28,6 +28,24 @@ export interface ResearchInput {
   date: string | null;
   lat: number | null;
   lng: number | null;
+  /** Facts the user has flagged "not interesting" — negative examples. */
+  dislikedFacts?: string[];
+}
+
+/** Pull the real cited web sources out of a grounded response. */
+function extractSources(res: unknown): Array<{ title: string; uri: string }> {
+  const chunks =
+    (res as { candidates?: Array<{ groundingMetadata?: { groundingChunks?: Array<{ web?: { title?: string; uri?: string } }> } }> })
+      ?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const out: Array<{ title: string; uri: string }> = [];
+  const seen = new Set<string>();
+  for (const c of chunks) {
+    const uri = c.web?.uri;
+    if (!uri || seen.has(uri)) continue;
+    seen.add(uri);
+    out.push({ title: c.web?.title ?? uri, uri });
+  }
+  return out;
 }
 
 export interface ResearchImage {
@@ -51,12 +69,17 @@ Return ONLY JSON: { "angles": [ { "question": "...", "kind": "searchable" } ], "
 
 const RESEARCH_SYSTEM = `You are a meticulous researcher preparing background for a personal conversation about someone's photos. You have Google Search. Verify, don't assume.
 
+RELEVANCE GATE — apply before anything else:
+- This is worth researching only if the moment centers on an EXPERIENCE or place of cultural interest: a restaurant/bar/café, a venue/concert/show/exhibition, a museum or artwork, a landmark or characterful neighborhood, a named person (chef, artist, performer), or travel.
+- If the moment is a mundane everyday scene — a laptop/phone/device on a desk, a screenshot, groceries, a receipt, a generic home or office interior, a product shot — return EMPTY facts and hooks. Do NOT research consumer-electronics brands, warranties (e.g. AppleCare), generic product specs, or everyday-object trivia. Silence is correct for boring moments.
+- A fact must be genuinely interesting: specific, a little obscure, and tied to something that clearly happened here — the kind of tidbit that makes a friend say "oh wow, I didn't know that." Generic encyclopedia background ("X was founded in 1990") only counts if it's surprising. When in doubt, leave it out.
+
 Your job each pass:
 1. Confirm or correct the venue. If text in the images shows the venue's own name (a menu/receipt/marquee/sign), trust THAT over GPS guesses, and search it to confirm what kind of place it is.
 2. CRITICAL — if the venue is an entertainment venue (music hall, theater, comedy club, arena, stadium, nightclub, cinema) AND a date is known, you MUST search for the specific event that night: "who performed/played at {venue} on {date}", "{venue} {date} lineup/setlist/show". Identify the exact artist(s), tour, opener, or film and record it. This is usually the single most interesting fact about the moment — do not skip it.
 3. Research what else is specific here: the venue's signature dishes/known-for, what any legible text refers to (posters, menus, signs — including exact dates/editions), and anything date/location relevant (events that day, openings, history).
 4. Work the ANGLE CHECKLIST you are given: investigate every OPEN searchable angle this pass. For each, report an outcome — "resolved" (with the finding), "dead_end" (searched, nothing), or "unknowable" (search can't answer this). Coverage matters: an angle silently skipped is a failure.
-5. Collect FACTS — each one verified via search, with the source domain. If search contradicts the analysis, say so. Never present a guess as a fact.
+5. Collect FACTS — for each, actually run a web search to confirm it, and cite the specific PUBLICATION domain you found it on (e.g. "brooklynvegan.com", "eater.com") — never "google.com". If search contradicts the analysis, say so. Never present a guess as a fact.
 6. Write HOOKS: specific, conversation-worthy angles a curious friend could bring up ("you saw X on the opening night of their tour", "their tasting menu changes monthly").
 7. List OPEN_QUESTIONS you couldn't resolve — a later pass will search them.
 
@@ -85,6 +108,13 @@ function metadataBlock(input: ResearchInput): string[] {
   if (input.lat != null && input.lng != null)
     lines.push(`Location: ${input.lat.toFixed(5)}, ${input.lng.toFixed(5)}`);
   lines.push(`Vision analysis: ${JSON.stringify(input.analysis)}`);
+  if (input.dislikedFacts && input.dislikedFacts.length) {
+    lines.push(
+      '',
+      "The user has flagged facts like these as NOT interesting — learn their taste and avoid this register (mundane, product/spec trivia, generic background):",
+      ...input.dislikedFacts.slice(0, 12).map((f) => `- ${f}`),
+    );
+  }
   return lines;
 }
 
@@ -270,7 +300,7 @@ export class GeminiResearch {
     prior: MomentResearch | null,
     angles: CuriosityAngle[],
     passNum: number,
-  ): Promise<{ result: MomentResearch; updates: AngleUpdate[] }> {
+  ): Promise<{ result: MomentResearch; updates: AngleUpdate[]; sources: Array<{ title: string; uri: string }> }> {
     const res = await this.ai.models.generateContent({
       model: env.gemini.visionModel,
       contents: [{ role: 'user', parts: [{ text: passPrompt(input, prior, angles) }] }],
@@ -281,7 +311,11 @@ export class GeminiResearch {
       },
     });
     const text = res.text ?? '';
-    return { result: normalizeResearch(text, passNum), updates: parseAngleUpdates(text) };
+    return {
+      result: normalizeResearch(text, passNum),
+      updates: parseAngleUpdates(text),
+      sources: extractSources(res),
+    };
   }
 
   async research(input: ResearchInput, images: ResearchImage[] = []): Promise<MomentResearch> {
@@ -300,8 +334,21 @@ export class GeminiResearch {
 
     // Phase 2: convergent passes working the checklist.
     let result: MomentResearch | null = null;
+    const sources: Array<{ title: string; uri: string }> = [];
+    const seenSources = new Set<string>();
     for (let pass = 1; pass <= env.research.passes; pass++) {
-      const { result: next, updates } = await this.onePass(input, result, angles, pass);
+      const { result: next, updates, sources: passSources } = await this.onePass(
+        input,
+        result,
+        angles,
+        pass,
+      );
+      for (const s of passSources) {
+        if (!seenSources.has(s.uri)) {
+          seenSources.add(s.uri);
+          sources.push(s);
+        }
+      }
       for (const u of updates) {
         const a = angles[u.index];
         if (a && a.kind === 'searchable' && a.status === 'open') {
@@ -323,6 +370,7 @@ export class GeminiResearch {
     };
     out.curiosity = angles.length ? angles : null;
     out.anomalies = anomalies;
+    out.sources = sources;
     return out;
   }
 

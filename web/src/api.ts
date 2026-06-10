@@ -105,6 +105,14 @@ export const api = {
     return json(await fetch(`${BASE}/facts`, { headers: authHeaders() }));
   },
 
+  flagFact(momentId: string, fact: string, verdict: 'drop' | 'keep'): void {
+    fetch(`${BASE}/facts/flag`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ momentId, fact, verdict }),
+    }).catch(() => {});
+  },
+
   async startSeed(seedId: string, opener?: string): Promise<StartedConversation> {
     return json(
       await fetch(`${BASE}/seeds/${seedId}/start`, {

@@ -150,6 +150,8 @@ export interface MomentResearch {
   curiosity?: CuriosityAngle[] | null;
   /** Surprising / out-of-place observations — curiosity magnets. */
   anomalies?: string[];
+  /** Real cited web sources from search grounding (uri resolves to the page). */
+  sources?: Array<{ title: string; uri: string }>;
   /** Photo interrogation: vision re-examines the images WITH the research. */
   verification?: {
     confirmations: string[];
@@ -291,7 +293,10 @@ export interface FunFact {
   id: string;
   momentId: string;
   fact: string;
+  /** Display label for the source (a domain, e.g. "brooklynvegan.com"). */
   source: string | null;
+  /** Real working link to the cited page (Google grounding redirect). */
+  sourceUrl: string | null;
   venueName: string | null;
   momentTitle: string | null;
   takenAt: string | null;

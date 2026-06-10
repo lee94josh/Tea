@@ -53,6 +53,13 @@ export async function runResearch(data: ResearchJob): Promise<void> {
           })
         : null;
 
+      // The user's "not interesting" flags become negative examples so research
+      // learns their taste over time.
+      const disliked = await query<{ fact: string }>(
+        `select fact from fact_feedback where verdict = 'drop'
+          order by created_at desc limit 12`,
+      );
+
       // Load vision derivatives once: the curiosity planner looks at them up
       // front, and interrogation re-examines them after research.
       const photoRows = await query<{ vision_key: string | null }>(
@@ -76,6 +83,7 @@ export async function runResearch(data: ResearchJob): Promise<void> {
           date,
           lat: m.lat,
           lng: m.lng,
+          dislikedFacts: disliked.rows.map((r) => r.fact),
         },
         images,
       );

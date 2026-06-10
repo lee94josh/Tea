@@ -88,7 +88,9 @@ html, body, #root {
 
 /* Fun Facts view */
 .factcard { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin: 10px 0; overflow: hidden; }
-.factmain { display: block; width: 100%; text-align: left; background: none; border: none; padding: 14px; }
+.factrow { display: flex; align-items: flex-start; }
+.factmain { flex: 1; display: block; text-align: left; background: none; border: none; padding: 14px; }
+.factflag { margin: 12px 12px 0 0; flex: 0 0 auto; }
 .facttext { font-size: 15px; line-height: 1.5; }
 .factdetail { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
 .factdetail img { width: 100%; border-radius: 12px; object-fit: cover; max-height: 60vh; }

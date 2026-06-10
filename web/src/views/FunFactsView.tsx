@@ -14,6 +14,12 @@ export function FunFactsView() {
   const [facts, setFacts] = useState<FunFact[] | null>(factsCache);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [dropped, setDropped] = useState<Set<string>>(new Set());
+
+  function flag(f: FunFact) {
+    setDropped((s) => new Set(s).add(f.id));
+    api.flagFact(f.momentId, f.fact, 'drop');
+  }
 
   useEffect(() => {
     api
@@ -41,36 +47,45 @@ export function FunFactsView() {
       <p className="small muted" style={{ padding: '0 4px' }}>
         true things hiding in your photos:
       </p>
-      {facts.map((f) => {
-        const isOpen = open === f.id;
-        return (
-          <div key={f.id} className="factcard">
-            <button className="factmain" onClick={() => setOpen(isOpen ? null : f.id)}>
-              <div className="facttext">{f.fact}</div>
-              <div className="small muted" style={{ marginTop: 6 }}>
-                {f.venueName ?? f.momentTitle ?? 'a moment'}
-                {f.takenAt ? ` · ${new Date(f.takenAt).toLocaleDateString()}` : ''}
-                {f.source ? ` · ${f.source}` : ''}
+      {facts
+        .filter((f) => !dropped.has(f.id))
+        .map((f) => {
+          const isOpen = open === f.id;
+          return (
+            <div key={f.id} className="factcard">
+              <div className="factrow">
+                <button className="factmain" onClick={() => setOpen(isOpen ? null : f.id)}>
+                  <div className="facttext">{f.fact}</div>
+                  <div className="small muted" style={{ marginTop: 6 }}>
+                    {f.venueName ?? f.momentTitle ?? 'a moment'}
+                    {f.takenAt ? ` · ${new Date(f.takenAt).toLocaleDateString()}` : ''}
+                    {f.source ? ` · ${f.source}` : ''}
+                  </div>
+                </button>
+                <button
+                  className="verdict factflag"
+                  aria-label="not interesting"
+                  title="not interesting"
+                  onClick={() => flag(f)}
+                >
+                  ✕
+                </button>
               </div>
-            </button>
-            {isOpen && (
-              <div className="factdetail">
-                {f.thumbUrl && <img src={f.thumbUrl} alt="" loading="lazy" />}
-                {f.source && (
-                  <a
-                    className="small"
-                    href={f.source.startsWith('http') ? f.source : `https://${f.source}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    learn more at {f.source} ↗
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+              {isOpen && (
+                <div className="factdetail">
+                  {f.thumbUrl && <img src={f.thumbUrl} alt="" loading="lazy" />}
+                  {f.sourceUrl ? (
+                    <a className="small" href={f.sourceUrl} target="_blank" rel="noreferrer">
+                      learn more{f.source ? ` at ${f.source}` : ''} ↗
+                    </a>
+                  ) : (
+                    f.source && <span className="small muted">source: {f.source}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
     </div>
   );
 }
