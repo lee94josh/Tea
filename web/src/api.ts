@@ -71,13 +71,28 @@ export const api = {
     return json(await fetch(`${BASE}/debug/moments`, { headers: authHeaders() }));
   },
 
-  async startSeed(seedId: string): Promise<StartedConversation> {
+  async startSeed(seedId: string, opener?: string): Promise<StartedConversation> {
     return json(
       await fetch(`${BASE}/seeds/${seedId}/start`, {
         method: 'POST',
-        headers: authHeaders(),
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(opener ? { opener } : {}),
       }),
     );
+  },
+
+  /** Fire-and-forget feedback for the prompt-refinement loop. */
+  feedback(body: {
+    kind: 'opener_choice' | 'chip_choice' | 'bad';
+    seedId?: string;
+    conversationId?: string;
+    payload: Record<string, unknown>;
+  }): void {
+    fetch(`${BASE}/feedback`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => {});
   },
 
   async conversation(id: string): Promise<ConversationHistory> {

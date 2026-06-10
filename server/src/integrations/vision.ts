@@ -25,8 +25,20 @@ export interface VisionImage {
   mimeType: string; // e.g. image/jpeg
 }
 
+export interface InterrogationResult {
+  confirmations: string[];
+  contradictions: string[];
+  new_details: string[];
+}
+
 export interface VisionClient {
   analyzeMoment(images: VisionImage[], grounding: MomentGrounding): Promise<MomentAnalysis>;
+  /**
+   * Photo interrogation: look at the images AGAIN, now armed with research
+   * facts. Confirm what's visible, flag contradictions, surface details that
+   * only become meaningful with the facts in hand.
+   */
+  interrogate(images: VisionImage[], facts: string[]): Promise<InterrogationResult>;
 }
 
 const ANALYSIS_SCHEMA = {
@@ -116,6 +128,52 @@ export class GeminiVision implements VisionClient {
 
     const text = res.text ?? '';
     return normalizeAnalysis(JSON.parse(text));
+  }
+
+  async interrogate(images: VisionImage[], facts: string[]): Promise<InterrogationResult> {
+    const prompt = [
+      'You already described these photos once. Since then, research found these facts:',
+      ...facts.map((f) => `- ${f}`),
+      '',
+      'Look at the photos AGAIN with these facts in mind:',
+      '1. confirmations — facts you can visually corroborate (say what you see that confirms them).',
+      '2. contradictions — facts the photos visibly contradict (be specific).',
+      '3. new_details — things you can NOW notice or decode that only make sense with these facts',
+      '   (a dish you can now name, a sign that now reads differently, a detail worth mentioning).',
+      'Only report what is actually visible. Return ONLY JSON.',
+    ].join('\n');
+
+    const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+    for (const img of images) {
+      parts.push({ inlineData: { mimeType: img.mimeType, data: img.bytes.toString('base64') } });
+    }
+
+    const res = await this.ai.models.generateContent({
+      model: env.gemini.visionModel,
+      contents: [{ role: 'user', parts }],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            confirmations: { type: 'array', items: { type: 'string' } },
+            contradictions: { type: 'array', items: { type: 'string' } },
+            new_details: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['confirmations', 'contradictions', 'new_details'],
+        } as unknown as object,
+        temperature: 0.3,
+      },
+    });
+
+    const o = (JSON.parse(res.text ?? '{}') ?? {}) as Record<string, unknown>;
+    const arr = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    return {
+      confirmations: arr(o.confirmations),
+      contradictions: arr(o.contradictions),
+      new_details: arr(o.new_details),
+    };
   }
 }
 

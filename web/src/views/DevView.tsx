@@ -55,35 +55,6 @@ function MomentCard({ d }: { d: DebugMoment }) {
         </div>
       )}
 
-      <Section title={`photos (${d.photos.length})`}>
-        {d.photos.map((p, i) => (
-          <div key={p.id} className="kv">
-            <div className="small">
-              <strong>#{i + 1}</strong> {p.width}×{p.height}
-              {p.cameraMake ? ` · ${p.cameraMake} ${p.cameraModel ?? ''}` : ' · no camera EXIF'}
-              {p.isScreenshot ? ' · 📱 screenshot' : ''} · {p.ingestStatus}
-            </div>
-            <div className="small muted">
-              {p.takenAt ? new Date(p.takenAt).toLocaleString() : 'no timestamp'}
-              {p.lat != null ? ` · ${p.lat.toFixed(5)},${p.lng?.toFixed(5)}` : ' · no GPS'}
-            </div>
-            {p.venues.length > 0 && (
-              <div className="small muted">
-                nearby:{' '}
-                {p.venues
-                  .map(
-                    (v) =>
-                      `${v.name ?? v.address ?? '?'}${v.category ? ` (${v.category})` : ''} ${
-                        v.confidence != null ? `[${v.confidence.toFixed(2)} ${v.source}]` : ''
-                      }`,
-                  )
-                  .join(' · ')}
-              </div>
-            )}
-          </div>
-        ))}
-      </Section>
-
       {a && (
         <Section title="vision analysis">
           <p className="small" style={{ marginTop: 0 }}>{a.summary}</p>
@@ -122,15 +93,57 @@ function MomentCard({ d }: { d: DebugMoment }) {
           )}
           <KvList label="hooks" items={r.hooks} />
           <KvList label="still open" items={r.open_questions} />
+          {r.verification && (
+            <>
+              <KvList label="✓ confirmed in photos" items={r.verification.confirmations} />
+              <KvList label="👁 newly spotted" items={r.verification.new_details} />
+              <KvList label="⚠ contradicted" items={r.verification.contradictions} />
+            </>
+          )}
         </Section>
       )}
 
       {d.seed && (
         <Section title={`seed (q=${d.seed.qualityScore?.toFixed(2) ?? '—'} · ${d.seed.status})`}>
-          <p className="small" style={{ marginTop: 0 }}>“{d.seed.opener}”</p>
+          <ol className="small" style={{ margin: '4px 0', paddingLeft: 18 }}>
+            {d.seed.openers.map((o, i) => (
+              <li key={i} style={o === d.seed!.opener ? { color: 'var(--accent)' } : undefined}>
+                “{o}”
+              </li>
+            ))}
+          </ol>
           <KvList label="chips" items={d.seed.suggestedReplies} />
         </Section>
       )}
+
+      <Section title={`photos (${d.photos.length})`} open={false}>
+        {d.photos.map((p, i) => (
+          <div key={p.id} className="kv">
+            <div className="small">
+              <strong>#{i + 1}</strong> {p.width}×{p.height}
+              {p.cameraMake ? ` · ${p.cameraMake} ${p.cameraModel ?? ''}` : ' · no camera EXIF'}
+              {p.isScreenshot ? ' · 📱 screenshot' : ''} · {p.ingestStatus}
+            </div>
+            <div className="small muted">
+              {p.takenAt ? new Date(p.takenAt).toLocaleString() : 'no timestamp'}
+              {p.lat != null ? ` · ${p.lat.toFixed(5)},${p.lng?.toFixed(5)}` : ' · no GPS'}
+            </div>
+            {p.venues.length > 0 && (
+              <div className="small muted">
+                nearby:{' '}
+                {p.venues
+                  .map(
+                    (v) =>
+                      `${v.name ?? v.address ?? '?'}${v.category ? ` (${v.category})` : ''} ${
+                        v.confidence != null ? `[${v.confidence.toFixed(2)} ${v.source}]` : ''
+                      }`,
+                  )
+                  .join(' · ')}
+              </div>
+            )}
+          </div>
+        ))}
+      </Section>
 
       <details className="small muted" style={{ marginTop: 8 }}>
         <summary>raw json</summary>
@@ -140,9 +153,17 @@ function MomentCard({ d }: { d: DebugMoment }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  open = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  open?: boolean;
+}) {
   return (
-    <details open className="devsection">
+    <details open={open} className="devsection">
       <summary className="small" style={{ fontWeight: 600 }}>{title}</summary>
       <div style={{ paddingTop: 4 }}>{children}</div>
     </details>

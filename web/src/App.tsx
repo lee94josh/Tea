@@ -16,16 +16,9 @@ export function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <h1>Lookback</h1>
         <div className="tabs">
           <button className={`tab ${tab === 'talk' ? 'active' : ''}`} onClick={() => setTab('talk')}>
             Talk
-          </button>
-          <button
-            className={`tab ${tab === 'upload' ? 'active' : ''}`}
-            onClick={() => setTab('upload')}
-          >
-            Upload
           </button>
           <button
             className={`tab ${tab === 'status' ? 'active' : ''}`}
@@ -37,6 +30,13 @@ export function App() {
             Dev
           </button>
         </div>
+        <button
+          className={`plusbtn ${tab === 'upload' ? 'active' : ''}`}
+          aria-label="Upload photos"
+          onClick={() => setTab('upload')}
+        >
+          +
+        </button>
       </div>
 
       {tab === 'talk' && <ConversationView />}

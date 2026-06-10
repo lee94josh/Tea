@@ -7,6 +7,8 @@
 import type { MomentAnalysis, MomentResearch } from '@lookback/shared';
 import { query } from '../db';
 import { research } from '../integrations/research';
+import { vision } from '../integrations/vision';
+import { storage } from '../storage';
 import { enqueue, JOBS } from '../queue';
 import { env } from '../env';
 
@@ -58,6 +60,35 @@ export async function runResearch(data: ResearchJob): Promise<void> {
         lat: m.lat,
         lng: m.lng,
       });
+
+      // Photo interrogation: close the loop between search and pixels —
+      // re-examine the images WITH the facts. Non-fatal enrichment.
+      if (result.facts.length > 0) {
+        try {
+          const photoRows = await query<{ vision_key: string | null }>(
+            `select p.vision_key from moment_photos mp
+               join photos p on p.id = mp.photo_id
+              where mp.moment_id = $1 and p.vision_key is not null
+              order by p.taken_at nulls last limit 6`,
+            [momentId],
+          );
+          const images = [];
+          for (const row of photoRows.rows) {
+            if (!row.vision_key) continue;
+            images.push({ bytes: await storage().get(row.vision_key), mimeType: 'image/jpeg' });
+          }
+          if (images.length > 0) {
+            result.verification = await vision().interrogate(
+              images,
+              [...result.facts.map((f) => f.fact), ...result.hooks],
+            );
+          }
+        } catch (err) {
+          console.warn(
+            `[research] interrogation failed for ${momentId} (non-fatal): ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
 
       // Research's verified venue beats earlier attributions when confident.
       const venueName =

@@ -49,7 +49,7 @@ export async function runSeed(data: SeedJob): Promise<void> {
       research: m.research,
     });
 
-    if (!draft.opener) {
+    if (draft.openers.length === 0) {
       await query(`update moments set status = 'error' where id = $1`, [momentId]);
       return;
     }
@@ -58,9 +58,15 @@ export async function runSeed(data: SeedJob): Promise<void> {
     const quality = photoCount >= 2 ? draft.quality_score : draft.quality_score * 0.7;
 
     await query(
-      `insert into conversation_seeds (moment_id, opener, suggested_replies, quality_score, status)
-       values ($1,$2,$3,$4,'unused')`,
-      [momentId, draft.opener, JSON.stringify(draft.suggested_replies), quality],
+      `insert into conversation_seeds (moment_id, opener, openers, suggested_replies, quality_score, status)
+       values ($1,$2,$3,$4,$5,'unused')`,
+      [
+        momentId,
+        draft.openers[0],
+        JSON.stringify(draft.openers),
+        JSON.stringify(draft.suggested_replies),
+        quality,
+      ],
     );
     await query(`update moments set status = 'seeded' where id = $1`, [momentId]);
 

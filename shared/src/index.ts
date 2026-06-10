@@ -136,14 +136,24 @@ export interface MomentResearch {
   /** Unresolved questions — input for the next research pass. */
   open_questions: string[];
   passes: number;
+  /** Photo interrogation: vision re-examines the images WITH the research. */
+  verification?: {
+    confirmations: string[];
+    contradictions: string[];
+    new_details: string[];
+  } | null;
 }
 
 /** Output of the `seed:generate` step (reasoning LLM). */
 export interface SeedDraft {
-  opener: string;
+  /** Three genuinely different ways to open — user picks one. */
+  openers: string[];
   suggested_replies: string[];
   quality_score: number; // 0.0 - 1.0
 }
+
+/** Feedback kinds for the prompt-refinement loop. */
+export type FeedbackKind = 'opener_choice' | 'chip_choice' | 'bad';
 
 // ---------------------------------------------------------------------------
 // API request/response shapes
@@ -209,6 +219,8 @@ export interface MomentListItem {
   startedAt: string | null;
   qualityScore: number | null;
   opener: string;
+  /** All candidate openers (3); `opener` is the default/first. */
+  openers: string[];
   suggestedReplies: string[];
   photos: PhotoRef[];
 }
@@ -262,6 +274,7 @@ export interface DebugMoment {
   photos: DebugPhoto[];
   seed: {
     opener: string;
+    openers: string[];
     suggestedReplies: string[];
     qualityScore: number | null;
     status: SeedStatus;

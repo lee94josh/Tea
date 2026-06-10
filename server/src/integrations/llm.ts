@@ -44,13 +44,14 @@ export interface LlmClient {
 
 const SEED_SYSTEM = `You turn a structured description of a photographed moment into the FIRST thing a perceptive friend would say about it.
 
-Return JSON: { "opener": string, "suggested_replies": string[3], "quality_score": number }.
+Return JSON: { "openers": string[3], "suggested_replies": string[3], "quality_score": number }.
 
 Rules:
-- The opener MUST reference concrete specifics from the moment (the venue, an activity, a notable detail, a food, legible text). A generic opener ("looks like you had fun!") is a failure. casual ≠ vague.
+- openers are THREE genuinely different ways to open this conversation — different angles, not rephrasings: e.g. one built on the most surprising verified research fact, one reacting to a specific visual detail, one more playful/curious take. The user picks their favorite.
+- Every opener MUST reference concrete specifics from the moment (the venue, an activity, a notable detail, a food, legible text). A generic opener ("looks like you had fun!") is a failure. casual ≠ vague.
 - If a Place is known, NEVER ask where it is — talk like you know the spot ("honeysuckle for the birthday? strong choice"). Asking "what spot is this?" when the place is given is a failure.
-- If verified research facts/hooks are provided, ground the opener in the most interesting one — knowing something real about the place or moment is what makes this feel like magic. Don't ask about things the research already answers.
-- The opener is your first TEXT about this moment: all lowercase, casual like texting a friend, short (one or two lines), ending in one genuine, specific question. a reaction + question is great too ("wait is that the spot on bedford? what'd you get?"). no flattery, no assistant-speak, barely any emoji.
+- If verified research facts/hooks are provided, ground at least one opener in the most interesting one — knowing something real about the place or moment is what makes this feel like magic. Don't ask about things the research already answers.
+- Each opener is a first TEXT about this moment: all lowercase, casual like texting a friend, short (one or two lines), ending in one genuine, specific question. a reaction + question is great too ("wait is that the spot on bedford? what'd you get?"). no flattery, no assistant-speak, barely any emoji.
 - suggested_replies are THREE genuine branches the user could pick, written as the USER texting back — also lowercase and casual:
     1. one that goes deeper into the moment,
     2. one that corrects or redirects ("nah it was actually..."),
@@ -106,6 +107,18 @@ function contextBlock(
     );
     if (research.hooks.length) {
       lines.push('Conversation-worthy angles:', ...research.hooks.map((h) => `- ${h}`));
+    }
+    const v = research.verification;
+    if (v) {
+      if (v.confirmations.length)
+        lines.push('Confirmed by looking at the photos again:', ...v.confirmations.map((s) => `- ${s}`));
+      if (v.new_details.length)
+        lines.push('Newly spotted in the photos:', ...v.new_details.map((s) => `- ${s}`));
+      if (v.contradictions.length)
+        lines.push(
+          'CAUTION — photos contradict these claims (do not assert them):',
+          ...v.contradictions.map((s) => `- ${s}`),
+        );
     }
   }
   return lines.join('\n');
@@ -239,8 +252,15 @@ function normalizeSeed(text: string): SeedDraft {
     ? parsed.suggested_replies.filter((x): x is string => typeof x === 'string')
     : [];
   const score = typeof parsed.quality_score === 'number' ? parsed.quality_score : 0.5;
+  // Prefer the three-opener shape; tolerate a legacy single `opener`.
+  let openers = Array.isArray(parsed.openers)
+    ? parsed.openers.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+    : [];
+  if (openers.length === 0 && typeof parsed.opener === 'string' && parsed.opener.trim()) {
+    openers = [parsed.opener];
+  }
   return {
-    opener: typeof parsed.opener === 'string' && parsed.opener.trim() ? parsed.opener : '',
+    openers: openers.slice(0, 3),
     suggested_replies: replies,
     quality_score: Math.min(1, Math.max(0, score)),
   };
@@ -251,11 +271,11 @@ function normalizeSeed(text: string): SeedDraft {
 const SEED_SCHEMA = {
   type: 'object',
   properties: {
-    opener: { type: 'string' },
+    openers: { type: 'array', items: { type: 'string' } },
     suggested_replies: { type: 'array', items: { type: 'string' } },
     quality_score: { type: 'number' },
   },
-  required: ['opener', 'suggested_replies', 'quality_score'],
+  required: ['openers', 'suggested_replies', 'quality_score'],
 } as const;
 
 export class GeminiLlm implements LlmClient {

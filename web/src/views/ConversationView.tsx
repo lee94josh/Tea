@@ -15,10 +15,16 @@ export function ConversationView() {
   // Current conversation state (rebuilt whenever the active moment changes).
   const [messages, setMessages] = useState<Msg[]>([]);
   const [chips, setChips] = useState<string[]>([]);
+  // When set, the moment hasn't started: user picks one of these openers first.
+  const [openerOptions, setOpenerOptions] = useState<string[] | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState('');
+  // "this is bad" report form
+  const [reporting, setReporting] = useState(false);
+  const [reportNote, setReportNote] = useState('');
+  const [reported, setReported] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   const current = items[index];
@@ -29,7 +35,7 @@ export function ConversationView() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streaming, busy]);
+  }, [messages, streaming, busy, openerOptions]);
 
   async function loadMoments() {
     setLoading(true);
@@ -42,21 +48,24 @@ export function ConversationView() {
     }
   }
 
-  // Open the moment at `i`: resume its conversation if started, else show the opener.
+  // Open the moment at `i`: resume its conversation if started, else offer openers.
   async function openMoment(list: MomentListItem[], i: number) {
     const item = list[i];
     if (!item) return;
     setIndex(i);
     setInput('');
     setStreaming('');
+    setReporting(false);
+    setReportNote('');
+    setReported(false);
 
     if (item.conversationId) {
+      setOpenerOptions(null);
       setConversationId(item.conversationId);
       try {
         const hist = await api.conversation(item.conversationId);
         const msgs: Msg[] = hist.messages.map((m) => ({ role: m.role, content: m.content }));
         setMessages(msgs);
-        // Offer the original branches only if they haven't replied yet.
         const replied = msgs.some((m) => m.role === 'user');
         setChips(replied ? [] : item.suggestedReplies);
       } catch {
@@ -64,9 +73,11 @@ export function ConversationView() {
         setChips(item.suggestedReplies);
       }
     } else {
+      // Not started: present the three candidate openers.
       setConversationId(null);
-      setMessages([{ role: 'assistant', content: item.opener }]);
-      setChips(item.suggestedReplies);
+      setMessages([]);
+      setChips([]);
+      setOpenerOptions(item.openers.length > 0 ? item.openers : [item.opener]);
     }
   }
 
@@ -77,34 +88,57 @@ export function ConversationView() {
     void openMoment(items, next);
   }
 
-  async function send(text: string) {
-    const content = text.trim();
-    if (!content || busy || !current) return;
+  // User picked one of the three openers — record it, start the conversation.
+  async function pickOpener(opener: string, idx: number) {
+    if (!current || busy) return;
     setBusy(true);
+    try {
+      api.feedback({
+        kind: 'opener_choice',
+        seedId: current.seedId,
+        payload: { index: idx, text: opener, options: openerOptions },
+      });
+      const started = await api.startSeed(current.seedId, opener);
+      setConversationId(started.conversation.id);
+      setItems((arr) =>
+        arr.map((it, i) =>
+          i === index ? { ...it, conversationId: started.conversation.id, opener } : it,
+        ),
+      );
+      setOpenerOptions(null);
+      setMessages([{ role: 'assistant', content: opener }]);
+      setChips(current.suggestedReplies);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function send(text: string, fromChipIndex?: number) {
+    const content = text.trim();
+    if (!content || busy || !current || !conversationId) return;
+    setBusy(true);
+    if (fromChipIndex !== undefined) {
+      api.feedback({
+        kind: 'chip_choice',
+        seedId: current.seedId,
+        conversationId,
+        payload: { index: fromChipIndex, text: content, options: chips },
+      });
+    }
     setChips([]);
     setInput('');
+    setReporting(false);
     setMessages((m) => [...m, { role: 'user', content }]);
 
     try {
-      // Lazily start the conversation on the first user turn, and remember the
-      // conversation id on the item so navigating away and back resumes it.
-      let convId = conversationId;
-      if (!convId) {
-        const started = await api.startSeed(current.seedId);
-        convId = started.conversation.id;
-        setConversationId(convId);
-        setItems((arr) =>
-          arr.map((it, i) => (i === index ? { ...it, conversationId: convId } : it)),
-        );
-      }
-
       setStreaming('');
-      const { text: full, suggestions } = await api.sendMessage(convId, content, (delta) =>
+      const { text: full, suggestions } = await api.sendMessage(conversationId, content, (delta) =>
         setStreaming((s) => s + delta),
       );
       setStreaming('');
       setMessages((m) => [...m, { role: 'assistant', content: full }]);
       setChips(suggestions);
+      setReported(false);
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -113,6 +147,23 @@ export function ConversationView() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function submitReport() {
+    if (!current) return;
+    api.feedback({
+      kind: 'bad',
+      seedId: current.seedId,
+      conversationId: conversationId ?? undefined,
+      payload: {
+        note: reportNote.trim(),
+        shownOptions: openerOptions ?? chips,
+        lastAssistant: messages.filter((m) => m.role === 'assistant').at(-1)?.content ?? null,
+      },
+    });
+    setReporting(false);
+    setReportNote('');
+    setReported(true);
   }
 
   if (loading) return <div className="card muted">Looking for something to talk about…</div>;
@@ -131,6 +182,7 @@ export function ConversationView() {
 
   const title = current.title ?? current.venueName ?? 'A moment';
   const when = current.startedAt ? new Date(current.startedAt).toLocaleDateString() : null;
+  const showFeedbackRow = (openerOptions?.length ?? 0) > 0 || chips.length > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -180,33 +232,80 @@ export function ConversationView() {
         <div ref={endRef} />
       </div>
 
+      {openerOptions && openerOptions.length > 0 && (
+        <div>
+          <div className="small muted" style={{ padding: '4px 0' }}>
+            pick how this one starts:
+          </div>
+          <div className="openers">
+            {openerOptions.map((o, i) => (
+              <button key={i} className="opener-option" onClick={() => pickOpener(o, i)} disabled={busy}>
+                {o}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {chips.length > 0 && (
         <div className="chips">
           {chips.map((c, i) => (
-            <button key={i} className="chip" onClick={() => send(c)} disabled={busy}>
+            <button key={i} className="chip" onClick={() => send(c, i)} disabled={busy}>
               {c}
             </button>
           ))}
         </div>
       )}
 
-      <div className="composer">
-        <textarea
-          value={input}
-          rows={1}
-          placeholder="Say something…"
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              send(input);
-            }
-          }}
-        />
-        <button className="primary" disabled={busy || !input.trim()} onClick={() => send(input)}>
-          Send
-        </button>
-      </div>
+      {showFeedbackRow && !reporting && !reported && (
+        <div>
+          <button className="ghost small badlink" onClick={() => setReporting(true)}>
+            this is bad
+          </button>
+        </div>
+      )}
+      {reporting && (
+        <div className="card" style={{ margin: '4px 0' }}>
+          <div className="small muted" style={{ paddingBottom: 6 }}>
+            what's wrong with these options? (saved for prompt tuning)
+          </div>
+          <textarea
+            value={reportNote}
+            rows={2}
+            placeholder="too generic / wrong place / weird tone…"
+            onChange={(e) => setReportNote(e.target.value)}
+          />
+          <div style={{ display: 'flex', gap: 8, paddingTop: 8 }}>
+            <button className="primary" onClick={submitReport} disabled={!reportNote.trim()}>
+              Save note
+            </button>
+            <button className="ghost" onClick={() => setReporting(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {reported && <div className="small muted" style={{ padding: '4px 0' }}>noted — thanks.</div>}
+
+      {!openerOptions && (
+        <div className="composer">
+          <textarea
+            value={input}
+            rows={1}
+            placeholder="Say something…"
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                send(input);
+              }
+            }}
+          />
+          <button className="primary" disabled={busy || !input.trim()} onClick={() => send(input)}>
+            Send
+          </button>
+        </div>
+      )}
     </div>
   );
 }

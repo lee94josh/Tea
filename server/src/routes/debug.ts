@@ -72,11 +72,12 @@ export function debugRoutes(app: FastifyInstance): void {
       const seedRow = (
         await query<{
           opener: string;
+          openers: unknown;
           suggested_replies: unknown;
           quality_score: number | null;
           status: 'unused' | 'started' | 'done';
         }>(
-          `select opener, suggested_replies, quality_score, status
+          `select opener, openers, suggested_replies, quality_score, status
              from conversation_seeds where moment_id = $1
             order by created_at desc limit 1`,
           [moment.id],
@@ -89,6 +90,10 @@ export function debugRoutes(app: FastifyInstance): void {
         seed: seedRow
           ? {
               opener: seedRow.opener,
+              openers:
+                Array.isArray(seedRow.openers) && seedRow.openers.length > 0
+                  ? (seedRow.openers as string[])
+                  : [seedRow.opener],
               suggestedReplies: Array.isArray(seedRow.suggested_replies)
                 ? (seedRow.suggested_replies as string[])
                 : [],
