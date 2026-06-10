@@ -12,7 +12,12 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import type { MomentAnalysis, MomentResearch, ResearchFact } from '@lookback/shared';
+import type {
+  CuriosityAngle,
+  MomentAnalysis,
+  MomentResearch,
+  ResearchFact,
+} from '@lookback/shared';
 import { env } from '../env';
 
 export interface ResearchInput {
@@ -24,25 +29,46 @@ export interface ResearchInput {
   lng: number | null;
 }
 
+export interface ResearchImage {
+  bytes: Buffer;
+  mimeType: string;
+}
+
+const CURIOSITY_SYSTEM = `You are the curiosity engine for a photo-memory app. Given someone's photos plus every scrap of metadata, produce the QUESTION PLAN a relentlessly nosy, perceptive friend would have.
+
+Rules:
+- 8 to 12 angles, genuinely distinct — no rephrasings of each other.
+- Reason across signals IN COMBINATION, not field by field: venue × date ("who played there that night?"), time × scene ("why 2am?"), legible text × location ("what does that poster refer to?"), date × library context (holiday? opening night?). Combination questions beat single-field questions.
+- For each piece of metadata, ask yourself: what would a nosy friend wonder about THIS?
+- Hunt anomalies: list separately anything surprising, missing, or out of place (a restaurant with no food shots, a party with no people, a 4am timestamp, an empty venue).
+- Tag each angle:
+  - "searchable" — the web can answer it (events that night, what a sign/poster refers to, a venue's history/menu/known-for, public facts about anything visible). Phrase as a concrete research task.
+  - "ask_user" — only the person can answer (who they were with, why they went, what they ordered if not visible, how it went). Phrase as a warm, specific question a friend would text.
+- Do NOT answer anything. Plan only.
+
+Return ONLY JSON: { "angles": [ { "question": "...", "kind": "searchable" } ], "anomalies": [ "..." ] }`;
+
 const RESEARCH_SYSTEM = `You are a meticulous researcher preparing background for a personal conversation about someone's photos. You have Google Search. Verify, don't assume.
 
 Your job each pass:
 1. Confirm or correct the venue. If text in the images shows the venue's own name (a menu/receipt/marquee/sign), trust THAT over GPS guesses, and search it to confirm what kind of place it is.
 2. CRITICAL — if the venue is an entertainment venue (music hall, theater, comedy club, arena, stadium, nightclub, cinema) AND a date is known, you MUST search for the specific event that night: "who performed/played at {venue} on {date}", "{venue} {date} lineup/setlist/show". Identify the exact artist(s), tour, opener, or film and record it. This is usually the single most interesting fact about the moment — do not skip it.
 3. Research what else is specific here: the venue's signature dishes/known-for, what any legible text refers to (posters, menus, signs — including exact dates/editions), and anything date/location relevant (events that day, openings, history).
-4. Collect FACTS — each one verified via search, with the source domain. If search contradicts the analysis, say so. Never present a guess as a fact.
-5. Write HOOKS: specific, conversation-worthy angles a curious friend could bring up ("you saw X on the opening night of their tour", "their tasting menu changes monthly").
-6. List OPEN_QUESTIONS you couldn't resolve — a later pass will search them.
+4. Work the ANGLE CHECKLIST you are given: investigate every OPEN searchable angle this pass. For each, report an outcome — "resolved" (with the finding), "dead_end" (searched, nothing), or "unknowable" (search can't answer this). Coverage matters: an angle silently skipped is a failure.
+5. Collect FACTS — each one verified via search, with the source domain. If search contradicts the analysis, say so. Never present a guess as a fact.
+6. Write HOOKS: specific, conversation-worthy angles a curious friend could bring up ("you saw X on the opening night of their tour", "their tasting menu changes monthly").
+7. List OPEN_QUESTIONS you couldn't resolve — a later pass will search them.
 
 Respond with ONLY a JSON object:
 {
   "venue": { "name": "...", "confidence": 0.0-1.0, "evidence": "one line" } or null,
   "facts": [ { "fact": "...", "source": "domain.com" } ],
   "hooks": [ "..." ],
-  "open_questions": [ "..." ]
+  "open_questions": [ "..." ],
+  "angle_updates": [ { "index": 0, "status": "resolved" | "dead_end" | "unknowable", "finding": "one line" } ]
 }`;
 
-function passPrompt(input: ResearchInput, prior: MomentResearch | null): string {
+function metadataBlock(input: ResearchInput): string[] {
   const lines: string[] = ['MOMENT DATA:'];
   if (input.venueName) lines.push(`Current venue attribution: ${input.venueName}`);
   if (input.venueCandidates.length) {
@@ -58,18 +84,68 @@ function passPrompt(input: ResearchInput, prior: MomentResearch | null): string 
   if (input.lat != null && input.lng != null)
     lines.push(`Location: ${input.lat.toFixed(5)}, ${input.lng.toFixed(5)}`);
   lines.push(`Vision analysis: ${JSON.stringify(input.analysis)}`);
+  return lines;
+}
+
+function passPrompt(
+  input: ResearchInput,
+  prior: MomentResearch | null,
+  angles: CuriosityAngle[],
+): string {
+  const lines = metadataBlock(input);
+
+  const checklist = angles
+    .map((a, i) =>
+      a.kind === 'searchable'
+        ? `[${i}] (${a.status}) ${a.question}${a.finding ? ` — prior finding: ${a.finding}` : ''}`
+        : null,
+    )
+    .filter((s): s is string => !!s);
+  if (checklist.length) {
+    lines.push(
+      '',
+      'ANGLE CHECKLIST (investigate every OPEN one; report angle_updates by index):',
+      ...checklist,
+    );
+  }
 
   if (prior) {
     lines.push(
       '',
       'PRIOR PASS RESULTS (build on these, do not repeat verified facts):',
       JSON.stringify({ venue: prior.venue, facts: prior.facts, hooks: prior.hooks }),
-      '',
-      'THIS PASS: focus on resolving these open questions:',
-      ...prior.open_questions.map((q) => `- ${q}`),
     );
+    if (prior.open_questions.length) {
+      lines.push('Also still open from last pass:', ...prior.open_questions.map((q) => `- ${q}`));
+    }
   }
   return lines.join('\n');
+}
+
+interface AngleUpdate {
+  index: number;
+  status: 'resolved' | 'dead_end' | 'unknowable';
+  finding?: string;
+}
+
+function parseAngleUpdates(text: string): AngleUpdate[] {
+  try {
+    const match = text.match(/\{[\s\S]*\}/);
+    const parsed = match ? JSON.parse(match[0]) : {};
+    if (!Array.isArray(parsed.angle_updates)) return [];
+    return parsed.angle_updates
+      .filter((u: unknown): u is Record<string, unknown> => !!u && typeof u === 'object')
+      .map((u: Record<string, unknown>) => ({
+        index: typeof u.index === 'number' ? u.index : -1,
+        status: (['resolved', 'dead_end', 'unknowable'].includes(u.status as string)
+          ? u.status
+          : 'open') as AngleUpdate['status'],
+        finding: typeof u.finding === 'string' ? u.finding : undefined,
+      }))
+      .filter((u: AngleUpdate) => u.index >= 0 && u.status !== ('open' as never));
+  } catch {
+    return [];
+  }
 }
 
 function normalizeResearch(text: string, passes: number): MomentResearch {
@@ -127,31 +203,126 @@ function mergeResearch(prior: MomentResearch, next: MomentResearch): MomentResea
 export class GeminiResearch {
   private ai = new GoogleGenAI({ apiKey: env.gemini.apiKey });
 
-  /** One search-grounded pass. Search tools disallow JSON mode → parse prose. */
-  private async onePass(input: ResearchInput, prior: MomentResearch | null, passNum: number) {
+  /**
+   * Divergent curiosity planning: SEES the photos + metadata, emits the angle
+   * list (searchable vs ask_user) and anomalies. Higher temperature on purpose
+   * — breadth before depth.
+   */
+  async planCuriosity(
+    input: ResearchInput,
+    images: ResearchImage[],
+  ): Promise<{ angles: CuriosityAngle[]; anomalies: string[] }> {
+    const parts: Array<Record<string, unknown>> = [
+      { text: metadataBlock(input).join('\n') },
+    ];
+    for (const img of images.slice(0, 6)) {
+      parts.push({ inlineData: { mimeType: img.mimeType, data: img.bytes.toString('base64') } });
+    }
     const res = await this.ai.models.generateContent({
       model: env.gemini.visionModel,
-      contents: [{ role: 'user', parts: [{ text: passPrompt(input, prior) }] }],
+      contents: [{ role: 'user', parts }],
+      config: {
+        systemInstruction: CURIOSITY_SYSTEM,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            angles: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  question: { type: 'string' },
+                  kind: { type: 'string', enum: ['searchable', 'ask_user'] },
+                },
+                required: ['question', 'kind'],
+              },
+            },
+            anomalies: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['angles', 'anomalies'],
+        } as unknown as object,
+        temperature: 0.9,
+      },
+    });
+    const o = (JSON.parse(res.text ?? '{}') ?? {}) as Record<string, unknown>;
+    const angles: CuriosityAngle[] = Array.isArray(o.angles)
+      ? o.angles
+          .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+          .map((a) => ({
+            question: typeof a.question === 'string' ? a.question : '',
+            kind: a.kind === 'ask_user' ? ('ask_user' as const) : ('searchable' as const),
+            status: 'open' as const,
+          }))
+          .filter((a) => a.question)
+          .slice(0, 12)
+      : [];
+    const anomalies = Array.isArray(o.anomalies)
+      ? o.anomalies.filter((x): x is string => typeof x === 'string')
+      : [];
+    return { angles, anomalies };
+  }
+
+  /** One search-grounded pass. Search tools disallow JSON mode → parse prose. */
+  private async onePass(
+    input: ResearchInput,
+    prior: MomentResearch | null,
+    angles: CuriosityAngle[],
+    passNum: number,
+  ): Promise<{ result: MomentResearch; updates: AngleUpdate[] }> {
+    const res = await this.ai.models.generateContent({
+      model: env.gemini.visionModel,
+      contents: [{ role: 'user', parts: [{ text: passPrompt(input, prior, angles) }] }],
       config: {
         systemInstruction: RESEARCH_SYSTEM,
         tools: [{ googleSearch: {} }],
         temperature: 0.3,
       },
     });
-    return normalizeResearch(res.text ?? '', passNum);
+    const text = res.text ?? '';
+    return { result: normalizeResearch(text, passNum), updates: parseAngleUpdates(text) };
   }
 
-  async research(input: ResearchInput): Promise<MomentResearch> {
+  async research(input: ResearchInput, images: ResearchImage[] = []): Promise<MomentResearch> {
+    // Phase 1: divergent planning (non-fatal — fall back to plan-free passes).
+    let angles: CuriosityAngle[] = [];
+    let anomalies: string[] = [];
+    try {
+      const plan = await this.planCuriosity(input, images);
+      angles = plan.angles;
+      anomalies = plan.anomalies;
+    } catch (err) {
+      console.warn(
+        `[research] curiosity planning failed (non-fatal): ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    // Phase 2: convergent passes working the checklist.
     let result: MomentResearch | null = null;
     for (let pass = 1; pass <= env.research.passes; pass++) {
-      const next = await this.onePass(input, result, pass);
+      const { result: next, updates } = await this.onePass(input, result, angles, pass);
+      for (const u of updates) {
+        const a = angles[u.index];
+        if (a && a.kind === 'searchable' && a.status === 'open') {
+          a.status = u.status;
+          if (u.finding) a.finding = u.finding;
+        }
+      }
       result = result ? mergeResearch(result, next) : next;
-      // Stop early if nothing left to chase.
-      if (result.open_questions.length === 0) break;
+      const openSearchable = angles.some((a) => a.kind === 'searchable' && a.status === 'open');
+      if (result.open_questions.length === 0 && !openSearchable) break;
     }
-    return (
-      result ?? { venue: null, facts: [], hooks: [], open_questions: [], passes: 0 }
-    );
+
+    const out: MomentResearch = result ?? {
+      venue: null,
+      facts: [],
+      hooks: [],
+      open_questions: [],
+      passes: 0,
+    };
+    out.curiosity = angles.length ? angles : null;
+    out.anomalies = anomalies;
+    return out;
   }
 }
 

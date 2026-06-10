@@ -109,6 +109,23 @@ function MomentCard({ d }: { d: DebugMoment }) {
         </Section>
       )}
 
+      {r?.curiosity && r.curiosity.length > 0 && (
+        <Section title={`curiosity plan (${r.curiosity.length} angles)`}>
+          {r.anomalies && r.anomalies.length > 0 && (
+            <KvList label="⚡ anomalies" items={r.anomalies} />
+          )}
+          <ul className="small" style={{ margin: '4px 0', paddingLeft: 18 }}>
+            {r.curiosity.map((a, i) => (
+              <li key={i}>
+                {a.kind === 'ask_user' ? '💬' : statusIcon(a.status)} {a.question}
+                {a.finding && <span className="muted"> → {a.finding}</span>}
+                {a.kind === 'ask_user' && <span className="muted"> (for the user)</span>}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {r && (
         <Section title={`research (${r.passes} pass${r.passes === 1 ? '' : 'es'})`}>
           {r.venue && (
@@ -203,6 +220,10 @@ function Section({
       <div style={{ paddingTop: 4 }}>{children}</div>
     </details>
   );
+}
+
+function statusIcon(s: string): string {
+  return s === 'resolved' ? '✓' : s === 'dead_end' ? '✗' : s === 'unknowable' ? '∅' : '…';
 }
 
 function KvList({ label, items }: { label: string; items: string[] }) {

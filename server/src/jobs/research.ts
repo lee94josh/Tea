@@ -52,37 +52,41 @@ export async function runResearch(data: ResearchJob): Promise<void> {
           })
         : null;
 
-      const result: MomentResearch = await research().research({
-        analysis: m.analysis,
-        venueName: m.venue_name,
-        venueCandidates: candidates.rows,
-        date,
-        lat: m.lat,
-        lng: m.lng,
-      });
+      // Load vision derivatives once: the curiosity planner looks at them up
+      // front, and interrogation re-examines them after research.
+      const photoRows = await query<{ vision_key: string | null }>(
+        `select p.vision_key from moment_photos mp
+           join photos p on p.id = mp.photo_id
+          where mp.moment_id = $1 and p.vision_key is not null
+          order by p.taken_at nulls last limit 6`,
+        [momentId],
+      );
+      const images = [];
+      for (const row of photoRows.rows) {
+        if (!row.vision_key) continue;
+        images.push({ bytes: await storage().get(row.vision_key), mimeType: 'image/jpeg' });
+      }
+
+      const result: MomentResearch = await research().research(
+        {
+          analysis: m.analysis,
+          venueName: m.venue_name,
+          venueCandidates: candidates.rows,
+          date,
+          lat: m.lat,
+          lng: m.lng,
+        },
+        images,
+      );
 
       // Photo interrogation: close the loop between search and pixels —
       // re-examine the images WITH the facts. Non-fatal enrichment.
-      if (result.facts.length > 0) {
+      if (result.facts.length > 0 && images.length > 0) {
         try {
-          const photoRows = await query<{ vision_key: string | null }>(
-            `select p.vision_key from moment_photos mp
-               join photos p on p.id = mp.photo_id
-              where mp.moment_id = $1 and p.vision_key is not null
-              order by p.taken_at nulls last limit 6`,
-            [momentId],
+          result.verification = await vision().interrogate(
+            images,
+            [...result.facts.map((f) => f.fact), ...result.hooks],
           );
-          const images = [];
-          for (const row of photoRows.rows) {
-            if (!row.vision_key) continue;
-            images.push({ bytes: await storage().get(row.vision_key), mimeType: 'image/jpeg' });
-          }
-          if (images.length > 0) {
-            result.verification = await vision().interrogate(
-              images,
-              [...result.facts.map((f) => f.fact), ...result.hooks],
-            );
-          }
         } catch (err) {
           console.warn(
             `[research] interrogation failed for ${momentId} (non-fatal): ${err instanceof Error ? err.message : err}`,

@@ -127,6 +127,16 @@ export interface ResearchFact {
   source?: string;
 }
 
+/** One angle the curiosity planner decided is worth chasing. */
+export interface CuriosityAngle {
+  question: string;
+  /** searchable = web can answer it; ask_user = only the person can. */
+  kind: 'searchable' | 'ask_user';
+  status: 'open' | 'resolved' | 'dead_end' | 'unknowable';
+  /** What research found, when resolved. */
+  finding?: string;
+}
+
 /** Output of the `research:moment` step (search-grounded enrichment). */
 export interface MomentResearch {
   venue: { name: string | null; confidence: number; evidence: string } | null;
@@ -136,6 +146,10 @@ export interface MomentResearch {
   /** Unresolved questions — input for the next research pass. */
   open_questions: string[];
   passes: number;
+  /** The curiosity plan: every angle considered, with its outcome. */
+  curiosity?: CuriosityAngle[] | null;
+  /** Surprising / out-of-place observations — curiosity magnets. */
+  anomalies?: string[];
   /** Photo interrogation: vision re-examines the images WITH the research. */
   verification?: {
     confirmations: string[];

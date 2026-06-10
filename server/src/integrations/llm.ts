@@ -108,6 +108,21 @@ function contextBlock(
     if (research.hooks.length) {
       lines.push('Conversation-worthy angles:', ...research.hooks.map((h) => `- ${h}`));
     }
+    const askUser = (research.curiosity ?? []).filter(
+      (a) => a.kind === 'ask_user' && a.status === 'open',
+    );
+    if (askUser.length) {
+      lines.push(
+        'Things only THEY can answer — these are the genuinely curious questions worth asking (one at a time, never as a list):',
+        ...askUser.map((a) => `- ${a.question}`),
+      );
+    }
+    if (research.anomalies?.length) {
+      lines.push(
+        'Surprising/out-of-place observations (great conversation material):',
+        ...research.anomalies.map((s) => `- ${s}`),
+      );
+    }
     const v = research.verification;
     if (v) {
       if (v.confirmations.length)
