@@ -7,7 +7,9 @@
  *
  *   - exclude screenshots
  *   - sort by taken_at (untimestamped photos bucket separately, deprioritized)
- *   - new moment when gap > 3h OR (both GPS) distance jump > 500m
+ *   - new moment when gap > 3h OR (both GPS) distance jump > 300m AND the two
+ *     photos don't resolve to the same venue (so GPS drift across one dinner
+ *     doesn't fragment it, but a few blocks to a different place does split)
  *   - moment time span from photo timestamps; venue/lat/lng from the most common
  *     resolved venue among its photos
  *   - moments with >=2 photos are preferred (single-photo allowed, lower score)
@@ -17,7 +19,7 @@ import { query, tx } from '../db';
 import { enqueue, JOBS } from '../queue';
 
 const GAP_MS = 3 * 60 * 60 * 1000; // 3 hours
-const DIST_M = 500; // 500 meters
+const DIST_M = 300; // ~a few blocks; tighter than before, venue-aware (see below)
 
 interface PhotoRow {
   id: string;
@@ -71,6 +73,19 @@ export async function runClusterMoments(): Promise<void> {
     .sort((a, b) => new Date(a.taken_at!).getTime() - new Date(b.taken_at!).getTime());
   const untimestamped = res.rows.filter((r) => !r.taken_at);
 
+  // Top resolved venue per photo — used so GPS drift within one place doesn't
+  // split a moment (the "different coords across one dinner" case).
+  const venueByPhoto = new Map<string, string>();
+  if (res.rows.length > 0) {
+    const vrows = await query<{ photo_id: string; name: string }>(
+      `select distinct on (photo_id) photo_id, name from venues
+         where name is not null and photo_id = any($1)
+         order by photo_id, confidence desc nulls last`,
+      [res.rows.map((r) => r.id)],
+    );
+    for (const v of vrows.rows) venueByPhoto.set(v.photo_id, v.name.trim().toLowerCase());
+  }
+
   // Build groups.
   const groups: PhotoRow[][] = [];
   let current: PhotoRow[] = [];
@@ -78,7 +93,11 @@ export async function runClusterMoments(): Promise<void> {
   for (const p of timestamped) {
     if (prev) {
       const gap = new Date(p.taken_at!).getTime() - new Date(prev.taken_at!).getTime();
+      const prevVenue = venueByPhoto.get(prev.id);
+      const pVenue = venueByPhoto.get(p.id);
+      const sameVenue = !!prevVenue && prevVenue === pVenue;
       const farApart =
+        !sameVenue &&
         prev.lat != null &&
         prev.lng != null &&
         p.lat != null &&

@@ -88,6 +88,12 @@ function groundingText(g: MomentGrounding): string {
     'Anchor on the facts above and on what is actually visible. Do NOT invent a venue,',
     'people, or details you cannot see. If unsure, leave the relevant field empty.',
     'Read any legible text (signs, menus, labels) into text_in_images.',
+    // Venue identification — text on the menu/sign beats GPS.
+    'IDENTIFY THE VENUE in venue_guess. If any image shows the establishment’s OWN',
+    'name — a menu header or footer, a receipt, matchbook, napkin, coaster, marquee,',
+    'storefront, or sign — that is the SINGLE STRONGEST signal: use that exact name with',
+    'high confidence (0.85+), even if it is not in the GPS candidate list. (e.g. a tasting',
+    'menu titled "Honeysuckle" means the venue is Honeysuckle.)',
   ];
   if (g.venueCandidates && g.venueCandidates.length > 0) {
     const list = g.venueCandidates
@@ -95,10 +101,15 @@ function groundingText(g: MomentGrounding): string {
       .map((c) => `${c.name}${c.category ? ` (${c.category})` : ''}`)
       .join('; ');
     lines.push(
-      `GPS says these places are within ~120m: ${list}.`,
-      'Judge from VISUAL evidence (food style, packaging, signage, interior, vibe) which',
-      'one this moment most likely happened at, and fill venue_guess with your pick,',
-      'a 0-1 confidence, and one line of reasoning. If none fit, set name to null.',
+      `GPS also says these places are within ~120m: ${list}.`,
+      'If no name is legible in the photos, pick the candidate that best matches the VISUAL',
+      'evidence (food style, packaging, signage, interior, vibe). Set venue_guess with your',
+      'pick, a 0-1 confidence, and one line of reasoning. If nothing fits, set name to null.',
+    );
+  } else {
+    lines.push(
+      'There are no GPS candidates, so rely on visible text/signage for venue_guess; if no',
+      'name is legible, set venue_guess.name to null.',
     );
   }
   lines.push('Return ONLY JSON matching the provided schema.');
