@@ -14,6 +14,7 @@
 import { GoogleGenAI } from '@google/genai';
 import type {
   CuriosityAngle,
+  DeepDive,
   MomentAnalysis,
   MomentResearch,
   ResearchFact,
@@ -323,6 +324,133 @@ export class GeminiResearch {
     out.curiosity = angles.length ? angles : null;
     out.anomalies = anomalies;
     return out;
+  }
+
+  /**
+   * Discover view: extract 2-4 learnable topics from a moment's analysis +
+   * research (the venue, people/artists, artworks, dishes, events, history).
+   */
+  async extractTopics(
+    analysis: MomentAnalysis,
+    researchData: MomentResearch | null,
+    venueName: string | null,
+  ): Promise<Array<{ name: string; kind: string; blurb: string }>> {
+    const prompt = [
+      'From this photo-moment, list 2-4 TOPICS the person could genuinely learn more about:',
+      'the venue itself, any person/artist/performer involved, artworks, notable dishes or',
+      'cuisine traditions, events, or relevant history. Each topic needs:',
+      '- name: the proper noun or concrete subject',
+      '- kind: place | person | artwork | food | event | history | other',
+      '- blurb: ONE intriguing sentence grounded in the data below (no invention).',
+      'Prefer specific over generic ("Brooklyn Paramount" not "concert venues").',
+      '',
+      venueName ? `Venue: ${venueName}` : '',
+      `Analysis: ${JSON.stringify(analysis)}`,
+      researchData
+        ? `Research: ${JSON.stringify({ facts: researchData.facts, hooks: researchData.hooks })}`
+        : '',
+    ].join('\n');
+
+    const res = await this.ai.models.generateContent({
+      model: env.gemini.chatModel,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            topics: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  kind: { type: 'string' },
+                  blurb: { type: 'string' },
+                },
+                required: ['name', 'kind', 'blurb'],
+              },
+            },
+          },
+          required: ['topics'],
+        } as unknown as object,
+        temperature: 0.6,
+      },
+    });
+    const o = (JSON.parse(res.text ?? '{}') ?? {}) as Record<string, unknown>;
+    return Array.isArray(o.topics)
+      ? o.topics
+          .filter((t): t is Record<string, unknown> => !!t && typeof t === 'object')
+          .map((t) => ({
+            name: typeof t.name === 'string' ? t.name : '',
+            kind: typeof t.kind === 'string' ? t.kind : 'other',
+            blurb: typeof t.blurb === 'string' ? t.blurb : '',
+          }))
+          .filter((t) => t.name)
+          .slice(0, 4)
+      : [];
+  }
+
+  /** Search-grounded deep dive on a topic, in the user's personal context. */
+  async deepDive(
+    topic: { name: string; kind: string | null },
+    context: { venueName: string | null; date: string | null; facts: string[] },
+  ): Promise<DeepDive> {
+    const prompt = [
+      `Write a deep-dive about: ${topic.name}${topic.kind ? ` (${topic.kind})` : ''}.`,
+      'Audience: one person who encountered this in their own life — personal context:',
+      context.venueName ? `they were at ${context.venueName}` : '',
+      context.date ? `on ${context.date}` : '',
+      context.facts.length ? `Already known: ${context.facts.join(' | ')}` : '',
+      '',
+      'Use Google Search to verify and to find what is genuinely fascinating — history,',
+      'connections, the stuff a great docent would tell you. Friendly and smart, not',
+      'academic. Do not pad; every sentence should earn its place.',
+      '',
+      'Return ONLY JSON:',
+      '{ "title": "...", "body_paragraphs": ["3-5 short paragraphs"],',
+      '  "fun_facts": ["3-5 verified, surprising facts"],',
+      '  "further_questions": ["2-3 things to explore next"] }',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    // One retry: search-grounded calls occasionally return empty under load.
+    let text = '';
+    for (let attempt = 0; attempt < 2 && !text.trim(); attempt++) {
+      const res = await this.ai.models.generateContent({
+        model: env.gemini.visionModel,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { tools: [{ googleSearch: {} }], temperature: 0.5 },
+      });
+      text = res.text ?? '';
+      if (!text.trim()) console.warn(`[research] empty deep-dive response (attempt ${attempt + 1})`);
+    }
+    // Models with search grounding often fence their JSON — strip fences, try a
+    // direct parse, then fall back to the outermost-braces match.
+    const cleaned = text.replace(/```(?:json)?/gi, '').trim();
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      try {
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        parsed = match ? JSON.parse(match[0]) : {};
+      } catch {
+        parsed = {};
+      }
+    }
+    const arr = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    const body = arr(parsed.body_paragraphs);
+    const proseFallback = cleaned.replace(/\{[\s\S]*\}/, '').trim();
+    return {
+      title: typeof parsed.title === 'string' && parsed.title ? parsed.title : topic.name,
+      // Tolerate prose-only responses so the dive never comes back empty.
+      body_paragraphs: body.length ? body : proseFallback ? [proseFallback] : [],
+      fun_facts: arr(parsed.fun_facts),
+      further_questions: arr(parsed.further_questions),
+    };
   }
 }
 

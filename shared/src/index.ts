@@ -256,6 +256,43 @@ export interface ConversationHistory {
 }
 
 // ---------------------------------------------------------------------------
+// Alternate experience views over the same data
+// ---------------------------------------------------------------------------
+
+/** `GET /feed` item — Instagram-style: one photo + an AI comment. */
+export interface FeedItem {
+  photoId: string;
+  momentId: string;
+  url: string | null; // vision-size image for the feed
+  thumbUrl: string | null;
+  takenAt: string | null;
+  title: string | null;
+  venueName: string | null;
+  /** Short AI comment drawn from the moment's hooks/notable/opener. */
+  comment: string | null;
+}
+
+/** `GET /discover` topic — something worth learning more about. */
+export interface DiscoverTopic {
+  id: string;
+  momentId: string;
+  name: string;
+  kind: string | null;
+  blurb: string | null;
+  venueName: string | null;
+  momentTitle: string | null;
+  hasDive: boolean;
+}
+
+/** `POST /discover/:id/dive` — cached search-grounded deep dive. */
+export interface DeepDive {
+  title: string;
+  body_paragraphs: string[];
+  fun_facts: string[];
+  further_questions: string[];
+}
+
+// ---------------------------------------------------------------------------
 // Dev / prototyping mode (`GET /debug/moments`)
 // ---------------------------------------------------------------------------
 

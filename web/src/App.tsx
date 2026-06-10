@@ -4,22 +4,50 @@ import { UploadView } from './views/UploadView';
 import { StatusView } from './views/StatusView';
 import { ConversationView } from './views/ConversationView';
 import { DevView } from './views/DevView';
+import { FeedView } from './views/FeedView';
+import { DiscoverView } from './views/DiscoverView';
 
-type Tab = 'talk' | 'upload' | 'status' | 'dev';
+/** Experience views: same photos + insights, different UI shapes. */
+type ViewMode = 'chat' | 'feed' | 'discover';
+type Tab = 'view' | 'upload' | 'status' | 'dev';
+
+const VIEW_LABELS: Record<ViewMode, string> = {
+  chat: '💬 Chat',
+  feed: '📷 Feed',
+  discover: '🔭 Discover',
+};
 
 export function App() {
   const [token, setTok] = useState(getToken());
-  const [tab, setTab] = useState<Tab>('talk');
+  const [tab, setTab] = useState<Tab>('view');
+  const [view, setView] = useState<ViewMode>(
+    (localStorage.getItem('lookback.view') as ViewMode) || 'chat',
+  );
 
   if (!token) return <TokenGate onSet={(t) => setTok(t)} />;
+
+  function pickView(v: ViewMode) {
+    setView(v);
+    localStorage.setItem('lookback.view', v);
+    setTab('view');
+  }
 
   return (
     <div className="app">
       <div className="topbar">
         <div className="tabs">
-          <button className={`tab ${tab === 'talk' ? 'active' : ''}`} onClick={() => setTab('talk')}>
-            Talk
-          </button>
+          <select
+            className={`viewselect ${tab === 'view' ? 'active' : ''}`}
+            value={view}
+            onChange={(e) => pickView(e.target.value as ViewMode)}
+            onClick={() => setTab('view')}
+          >
+            {(Object.keys(VIEW_LABELS) as ViewMode[]).map((v) => (
+              <option key={v} value={v}>
+                {VIEW_LABELS[v]}
+              </option>
+            ))}
+          </select>
           <button
             className={`tab ${tab === 'status' ? 'active' : ''}`}
             onClick={() => setTab('status')}
@@ -39,7 +67,9 @@ export function App() {
         </button>
       </div>
 
-      {tab === 'talk' && <ConversationView />}
+      {tab === 'view' && view === 'chat' && <ConversationView />}
+      {tab === 'view' && view === 'feed' && <FeedView />}
+      {tab === 'view' && view === 'discover' && <DiscoverView />}
       {tab === 'upload' && <UploadView onUploaded={() => setTab('status')} />}
       {tab === 'status' && <StatusView />}
       {tab === 'dev' && <DevView />}

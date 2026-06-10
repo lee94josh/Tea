@@ -3,6 +3,9 @@
 import type {
   ConversationHistory,
   DebugMoment,
+  DeepDive,
+  DiscoverTopic,
+  FeedItem,
   MomentListItem,
   NextSeed,
   StartedConversation,
@@ -73,6 +76,20 @@ export const api = {
 
   async reprocess(): Promise<{ ok: boolean; reprocessing: number }> {
     return json(await fetch(`${BASE}/admin/reprocess`, { method: 'POST', headers: authHeaders() }));
+  },
+
+  async feed(): Promise<FeedItem[]> {
+    return json(await fetch(`${BASE}/feed`, { headers: authHeaders() }));
+  },
+
+  async discover(): Promise<DiscoverTopic[]> {
+    return json(await fetch(`${BASE}/discover`, { headers: authHeaders() }));
+  },
+
+  async dive(topicId: string): Promise<DeepDive> {
+    return json(
+      await fetch(`${BASE}/discover/${topicId}/dive`, { method: 'POST', headers: authHeaders() }),
+    );
   },
 
   async startSeed(seedId: string, opener?: string): Promise<StartedConversation> {
