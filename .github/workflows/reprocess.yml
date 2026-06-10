@@ -1,0 +1,33 @@
+# Manually re-run analysis + research + openers for all uploaded photos on the
+# live deployment. The runner can reach the public Railway URL; auth uses the
+# APP_TOKEN repo secret. Safe: photos are never touched, only derived data.
+name: reprocess
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Public base URL of the deployment
+        default: https://lookback-production.up.railway.app
+        required: true
+
+jobs:
+  reprocess:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger reprocess
+        run: |
+          set -euo pipefail
+          [ -n "${{ secrets.APP_TOKEN }}" ] || { echo "::error::APP_TOKEN secret missing"; exit 1; }
+          URL="${{ github.event.inputs.url }}"
+          echo "POST $URL/admin/reprocess"
+          RESP=$(curl -s -w '\n%{http_code}' -X POST \
+            -H "Authorization: Bearer ${{ secrets.APP_TOKEN }}" \
+            "$URL/admin/reprocess")
+          BODY=$(echo "$RESP" | head -n-1)
+          CODE=$(echo "$RESP" | tail -n1)
+          echo "HTTP $CODE"
+          echo "$BODY"
+          echo "### Reprocess: HTTP $CODE — $BODY" >> "$GITHUB_STEP_SUMMARY"
+          [ "$CODE" = "200" ] || { echo "::error::reprocess failed"; exit 1; }

@@ -71,6 +71,10 @@ export const api = {
     return json(await fetch(`${BASE}/debug/moments`, { headers: authHeaders() }));
   },
 
+  async reprocess(): Promise<{ ok: boolean; reprocessing: number }> {
+    return json(await fetch(`${BASE}/admin/reprocess`, { method: 'POST', headers: authHeaders() }));
+  },
+
   async startSeed(seedId: string, opener?: string): Promise<StartedConversation> {
     return json(
       await fetch(`${BASE}/seeds/${seedId}/start`, {

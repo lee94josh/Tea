@@ -10,23 +10,58 @@ import type { DebugMoment } from '@lookback/shared';
 export function DevView() {
   const [items, setItems] = useState<DebugMoment[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessMsg, setReprocessMsg] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
     api
       .debugMoments()
       .then(setItems)
       .catch((e) => setErr(e instanceof Error ? e.message : 'failed'));
-  }, []);
+  }
 
-  if (err) return <div className="card" style={{ color: 'var(--accent)' }}>{err}</div>;
-  if (!items) return <div className="card muted">Loading everything we know…</div>;
-  if (items.length === 0) return <div className="card muted">No moments yet.</div>;
+  useEffect(load, []);
+
+  async function reprocess() {
+    if (
+      !confirm(
+        'Re-run analysis + research + openers for ALL uploaded photos?\n\nThis regenerates every moment and discards current conversations. Photos are kept.',
+      )
+    )
+      return;
+    setReprocessing(true);
+    setReprocessMsg(null);
+    try {
+      const r = await api.reprocess();
+      setReprocessMsg(`Reprocessing ${r.reprocessing} photo(s)… refresh in a minute to watch.`);
+      setItems(null);
+      setTimeout(load, 4000);
+    } catch (e) {
+      setReprocessMsg(`Failed: ${e instanceof Error ? e.message : 'error'}`);
+    } finally {
+      setReprocessing(false);
+    }
+  }
 
   return (
     <div>
-      {items.map((d) => (
-        <MomentCard key={d.moment.id} d={d} />
-      ))}
+      <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button className="primary" onClick={reprocess} disabled={reprocessing}>
+          {reprocessing ? 'Reprocessing…' : 'Re-run analysis & openers (all photos)'}
+        </button>
+        <button className="ghost small" onClick={load}>
+          Refresh
+        </button>
+      </div>
+      {reprocessMsg && <div className="card small muted">{reprocessMsg}</div>}
+      {err && <div className="card" style={{ color: 'var(--accent)' }}>{err}</div>}
+      {!items && !err ? (
+        <div className="card muted">Loading everything we know…</div>
+      ) : items && items.length === 0 ? (
+        <div className="card muted">No moments yet.</div>
+      ) : (
+        items?.map((d) => <MomentCard key={d.moment.id} d={d} />)
+      )}
     </div>
   );
 }
