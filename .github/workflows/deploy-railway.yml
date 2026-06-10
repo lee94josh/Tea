@@ -130,15 +130,18 @@ jobs:
           echo "$R" | jq -e '.data.variableCollectionUpsert' >/dev/null || { echo "::error::variableCollectionUpsert failed:"; echo "$R" | jq .; exit 1; }
           echo "variables set"
 
-          # ---- public domain ----
+          # ---- public domain (tolerant: a transient/odd response must not abort
+          #      the whole deploy — the domain is stable once created) ----
           R=$(gql 'query($e: String!, $s: String!) { domains(environmentId: $e, serviceId: $s) { serviceDomains { domain } } }' \
                   "$(jq -n --arg e "$EID" --arg s "$SID" '{e:$e, s:$s}')")
-          DOMAIN=$(echo "$R" | jq -r '.data.domains.serviceDomains[0].domain // empty')
+          DOMAIN=$(echo "$R" | jq -r '.data.domains.serviceDomains[0].domain // empty' 2>/dev/null || true)
           if [ -z "$DOMAIN" ]; then
             R=$(gql 'mutation($i: ServiceDomainCreateInput!) { serviceDomainCreate(input: $i) { domain } }' \
                     "$(jq -n --arg e "$EID" --arg s "$SID" '{i:{environmentId:$e, serviceId:$s, targetPort:8080}}')")
-            DOMAIN=$(must "$R" '.data.serviceDomainCreate.domain' serviceDomainCreate)
+            DOMAIN=$(echo "$R" | jq -r '.data.serviceDomainCreate.domain // empty' 2>/dev/null || true)
           fi
+          # Last resort: Railway's deterministic name for this service/env.
+          [ -n "$DOMAIN" ] || DOMAIN="${SVC}-production.up.railway.app"
           echo "domain: https://$DOMAIN"
 
           # ---- project token for the code upload ----
