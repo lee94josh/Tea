@@ -82,7 +82,7 @@ enum SyncRunner {
 
         await engine.sync(serverURL: server, token: token, library: library)
 
-        let state = await engine.state
+        let state = await MainActor.run { engine.state }
         if case .finished(let uploaded, let failed) = state {
             return Result(ok: true, uploaded: uploaded,
                           message: "Uploaded \(uploaded)\(failed > 0 ? ", \(failed) failed" : "")")

@@ -83,13 +83,13 @@ struct ArticleReaderView: View {
         let leadCount = min(4, words.count)
         let lead = words.prefix(leadCount).joined(separator: " ").uppercased()
         let rest = words.dropFirst(leadCount).joined(separator: " ")
-        return (
-            Text(lead)
-                .font(.system(size: 15, weight: .semibold, design: .serif))
-                .kerning(1.2)
-            + Text(rest.isEmpty ? "" : " " + rest)
-                .font(.system(size: 17, design: .serif))
-        )
-        .lineSpacing(6)
+        // iOS 26 deprecates Text + Text; styled segments via interpolation.
+        let leadText = Text(lead)
+            .font(.system(size: 15, weight: .semibold, design: .serif))
+            .kerning(1.2)
+        let restText = Text(rest.isEmpty ? "" : " " + rest)
+            .font(.system(size: 17, design: .serif))
+        return Text("\(leadText)\(restText)")
+            .lineSpacing(6)
     }
 }
