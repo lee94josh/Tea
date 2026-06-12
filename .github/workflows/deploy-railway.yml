@@ -171,6 +171,11 @@ jobs:
             if [ "$CODE" = "200" ]; then
               echo "LIVE: https://$DOMAIN"
               echo "### Lookback is live: https://$DOMAIN" >> "$GITHUB_STEP_SUMMARY"
+              # Warm the paper: /articles enqueues generation for topics that
+              # don't have an article yet, so stories are ready by morning.
+              N=$(curl -s -H "Authorization: Bearer ${{ secrets.APP_TOKEN }}" \
+                "https://$DOMAIN/articles" | head -c 200000 | grep -o '"headline"' | wc -l || true)
+              echo "paper warmup: $N article(s) already written; backfill enqueued for the rest"
               exit 0
             fi
             sleep 10
