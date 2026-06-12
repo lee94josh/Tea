@@ -25,7 +25,7 @@ upload one original (EXIF intact) to `/upload`, watch it flow through the
 pipeline. Proves the toolchain (Xcode, signing, PhotoKit, device run) and the
 client→server loop. Ship this to your phone first; everything else builds on it.
 
-### Phase 2 — sync engine
+### Phase 2 — sync engine (code written, pending first device build) ✅
 Track which `PHAsset.localIdentifier`s have been uploaded (local store). On app
 open, upload new originals (with metadata) that aren't yet processed. Add a
 `PHPhotoLibraryChangeObserver` to catch additions while running. Show progress.

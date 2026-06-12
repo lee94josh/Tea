@@ -8,6 +8,7 @@ struct ContentView: View {
     @AppStorage("appToken") private var token = ""
     @AppStorage("serverURL") private var serverURL = Config.defaultServerURL
     @StateObject private var library = PhotoLibrary()
+    @StateObject private var sync = SyncEngine()
     @State private var statusText = ""
     @State private var busy = false
 
@@ -55,10 +56,55 @@ struct ContentView: View {
                 } footer: {
                     Text("Then open the web app (Status / Dev) to watch it flow through the pipeline.")
                 }
+
+                if library.isAuthorized {
+                    Section("Sync") {
+                        HStack {
+                            Text("New photos (last \(sync.syncWindowDays) days)")
+                            Spacer()
+                            Text("\(sync.pendingCount)").foregroundStyle(.secondary)
+                        }
+                        switch sync.state {
+                        case .uploading(let done, let total, let current):
+                            VStack(alignment: .leading, spacing: 4) {
+                                ProgressView(value: Double(done), total: Double(total))
+                                Text("Uploading \(done + 1) of \(total) (\(current))…")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        case .finished(let uploaded, let failed):
+                            Text("✓ Synced \(uploaded)\(failed > 0 ? " · \(failed) failed" : "")")
+                                .font(.footnote)
+                        case .error(let message):
+                            Text("✗ \(message)").font(.footnote).foregroundStyle(.red)
+                        case .scanning:
+                            Text("Scanning…").font(.footnote).foregroundStyle(.secondary)
+                        case .idle:
+                            EmptyView()
+                        }
+                        Button("Sync new photos") {
+                            Task { await sync.sync(serverURL: serverURL, token: token, library: library) }
+                        }
+                        .disabled(token.isEmpty || isSyncing)
+                    } footer: {
+                        Text("Capped at \(sync.maxPerRun) per run until on-device triage lands — every upload feeds the research pipeline.")
+                    }
+                }
             }
             .navigationTitle("Lookback")
-            .task { library.refresh() }
+            .task {
+                library.refresh()
+                if library.isAuthorized {
+                    sync.startObserving()
+                    sync.refreshPendingCount()
+                }
+            }
         }
+    }
+
+    private var isSyncing: Bool {
+        if case .uploading = sync.state { return true }
+        if case .scanning = sync.state { return true }
+        return false
     }
 
     private func uploadLatest() async {
