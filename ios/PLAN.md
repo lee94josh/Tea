@@ -30,7 +30,7 @@ Track which `PHAsset.localIdentifier`s have been uploaded (local store). On app
 open, upload new originals (with metadata) that aren't yet processed. Add a
 `PHPhotoLibraryChangeObserver` to catch additions while running. Show progress.
 
-### Phase 3 — background catch-up
+### Phase 3 — background catch-up (code written) ✅
 Register a `BGProcessingTask` (require network; prefer power) to upload/triage
 the backlog overnight. Add `BGAppRefreshTask` for light top-ups. Accept that
 scheduling is opportunistic.
@@ -45,7 +45,7 @@ Before upload, filter + cluster locally so only interesting moments leave the ph
 Only genuinely interesting moments get their originals uploaded for the server's
 Gemini research + conversation generation.
 
-### Phase 5 — native views
+### Phase 5 — native views (newspaper-first redesign shipped; chat/feeds deferred) ✅
 Rebuild Talk / Feed / Discover / Fun Facts natively against the existing JSON
 APIs (or webview them initially to move fast, then nativize).
 

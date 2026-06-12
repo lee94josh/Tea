@@ -1,131 +1,104 @@
 import SwiftUI
 import Photos
 
-/// Phase 1 thin slice: prove the toolchain + the client→server loop.
-/// Paste your app token, grant photo access, see recent photos WITH their
-/// real GPS/date, and upload the most recent original to the live pipeline.
+/// App shell: the paper IS the app. Setup appears only when unconfigured;
+/// settings live behind the gear. Background sync gets scheduled whenever we
+/// leave the foreground; a quiet top-up sync runs on every return.
 struct ContentView: View {
     @AppStorage("appToken") private var token = ""
     @AppStorage("serverURL") private var serverURL = Config.defaultServerURL
     @StateObject private var library = PhotoLibrary()
     @StateObject private var sync = SyncEngine()
-    @State private var statusText = ""
-    @State private var busy = false
+    @State private var showSettings = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Server") {
-                    TextField("Server URL", text: $serverURL)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    SecureField("App token", text: $token)
+            Group {
+                if token.isEmpty {
+                    FirstRunView(token: $token, serverURL: $serverURL, library: library)
+                } else {
+                    PaperView()
                 }
-
-                Section("Photos") {
-                    if library.isAuthorized {
-                        Text("\(library.items.count) recent photos")
-                            .foregroundStyle(.secondary)
-                        ForEach(library.items.prefix(8)) { item in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.creationDate?.formatted(date: .abbreviated, time: .shortened)
-                                     ?? "no date")
-                                    .font(.callout)
-                                Text(item.coordinate.map {
-                                    String(format: "GPS  %.4f, %.4f", $0.latitude, $0.longitude)
-                                } ?? "no GPS")
-                                    .font(.caption)
-                                    .foregroundStyle(item.coordinate == nil ? .secondary : .green)
-                            }
+            }
+            .toolbar {
+                if !token.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
                         }
-                    } else {
-                        Button("Grant photo access") {
-                            Task { await library.requestAccess() }
-                        }
-                    }
-                }
-
-                Section {
-                    Button(busy ? "Uploading…" : "Upload most recent photo") {
-                        Task { await uploadLatest() }
-                    }
-                    .disabled(busy || token.isEmpty || library.items.isEmpty)
-                    if !statusText.isEmpty {
-                        Text(statusText).font(.footnote)
-                    }
-                } footer: {
-                    Text("Then open the web app (Status / Dev) to watch it flow through the pipeline.")
-                }
-
-                if library.isAuthorized {
-                    Section("Sync") {
-                        HStack {
-                            Text("New photos (last \(sync.syncWindowDays) days)")
-                            Spacer()
-                            Text("\(sync.pendingCount)").foregroundStyle(.secondary)
-                        }
-                        switch sync.state {
-                        case .uploading(let done, let total, let current):
-                            VStack(alignment: .leading, spacing: 4) {
-                                ProgressView(value: Double(done), total: Double(total))
-                                Text("Uploading \(done + 1) of \(total) (\(current))…")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        case .finished(let uploaded, let failed):
-                            Text("✓ Synced \(uploaded)\(failed > 0 ? " · \(failed) failed" : "")")
-                                .font(.footnote)
-                        case .error(let message):
-                            Text("✗ \(message)").font(.footnote).foregroundStyle(.red)
-                        case .scanning:
-                            Text("Scanning…").font(.footnote).foregroundStyle(.secondary)
-                        case .idle:
-                            EmptyView()
-                        }
-                        Button("Sync new photos") {
-                            Task { await sync.sync(serverURL: serverURL, token: token, library: library) }
-                        }
-                        .disabled(token.isEmpty || isSyncing)
-                    } footer: {
-                        Text("Capped at \(sync.maxPerRun) per run until on-device triage lands — every upload feeds the research pipeline.")
+                        .tint(.primary)
                     }
                 }
             }
-            .navigationTitle("Lookback")
-            .task {
-                library.refresh()
-                if library.isAuthorized {
-                    sync.startObserving()
-                    sync.refreshPendingCount()
+        }
+        .tint(.primary)
+        .sheet(isPresented: $showSettings) {
+            SettingsView(library: library, sync: sync)
+        }
+        .task {
+            library.refresh()
+            if library.isAuthorized {
+                sync.startObserving()
+                sync.refreshPendingCount()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                BackgroundSync.scheduleAll()
+            case .active:
+                // Quiet top-up: a few photos, no UI. New articles arrive on
+                // the next pull-to-refresh once research finishes.
+                if !token.isEmpty && library.isAuthorized {
+                    Task.detached(priority: .utility) {
+                        _ = await SyncRunner.run(limit: 8)
+                    }
                 }
+            default:
+                break
             }
         }
     }
+}
 
-    private var isSyncing: Bool {
-        if case .uploading = sync.state { return true }
-        if case .scanning = sync.state { return true }
-        return false
-    }
+/// One-screen onboarding: token, photo access, done. No tabs, no tour.
+private struct FirstRunView: View {
+    @Binding var token: String
+    @Binding var serverURL: String
+    @ObservedObject var library: PhotoLibrary
+    @State private var draft = ""
 
-    private func uploadLatest() async {
-        guard let item = library.items.first else { return }
-        busy = true
-        defer { busy = false }
-        statusText = "Reading original…"
-        guard let (data, filename, mime) = await library.originalData(for: item.asset) else {
-            statusText = "Couldn't read photo data"
-            return
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Spacer()
+            Text("LOOKBACK")
+                .font(.system(size: 40, weight: .black, design: .serif))
+                .kerning(2)
+            Text("A newspaper written from your photos.")
+                .font(.system(.title3, design: .serif))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 10) {
+                SecureField("App token", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    token = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Task { await library.requestAccess() }
+                } label: {
+                    Text("Start the presses")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.primary)
+                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            Spacer()
+            Spacer()
         }
-        statusText = "Uploading \(filename) (\(data.count / 1024) KB)…"
-        do {
-            let result = try await Uploader.upload(
-                serverURL: serverURL, token: token,
-                data: data, filename: filename, mime: mime
-            )
-            statusText = "✓ Uploaded — accepted \(result.accepted.count), rejected \(result.rejected.count)."
-        } catch {
-            statusText = "✗ \(error.localizedDescription)"
-        }
+        .padding(28)
     }
 }
 
