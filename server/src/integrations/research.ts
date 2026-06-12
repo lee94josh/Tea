@@ -598,16 +598,29 @@ export class GeminiResearch {
       .filter(Boolean)
       .join('\n');
 
-    // Search-grounded; retry once on empty (same flakiness as deepDive).
+    // Flash-first for throughput + far higher rate limits than the pro model
+    // (articles are short explainers; flash + search is plenty). A 429 on one
+    // model is tried on the next; if ALL rate-limit, the error propagates so
+    // the caller can back off rather than silently produce nothing.
+    const chain = [
+      ...new Set([env.gemini.chatModel, 'gemini-flash-latest', 'gemini-flash-lite-latest']),
+    ];
     let text = '';
-    for (let attempt = 0; attempt < 2 && !text.trim(); attempt++) {
-      const res = await this.ai.models.generateContent({
-        model: env.gemini.visionModel,
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { tools: [{ googleSearch: {} }], temperature: 0.6 },
-      });
-      text = res.text ?? '';
+    let lastErr: unknown = null;
+    for (const model of chain) {
+      try {
+        const res = await this.ai.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: { tools: [{ googleSearch: {} }], temperature: 0.6 },
+        });
+        text = res.text ?? '';
+        if (text.trim()) break;
+      } catch (err) {
+        lastErr = err;
+      }
     }
+    if (!text.trim() && lastErr) throw lastErr; // let the coordinator back off
     const cleaned = text.replace(/```(?:json)?/gi, '').trim();
     let parsed: Record<string, unknown> = {};
     try {

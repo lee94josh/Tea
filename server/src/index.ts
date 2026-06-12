@@ -13,7 +13,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { env } from './env';
 import { pool } from './db';
-import { startBoss } from './queue';
+import { startBoss, enqueue, JOBS } from './queue';
 import { registerJobs } from './jobs/index';
 import { uploadRoutes } from './routes/upload';
 import { statusRoutes } from './routes/status';
@@ -69,6 +69,10 @@ async function main() {
   // Start the worker in-process.
   const boss = await startBoss();
   await registerJobs(boss);
+
+  // Kick the article drain so any backlog (e.g. after a restart) keeps writing
+  // without waiting for the app to hit /articles.
+  await enqueue(JOBS.articleCoordinator, {}, { singletonKey: 'article-coord' }).catch(() => {});
 
   await app.listen({ port: env.port, host: '0.0.0.0' });
   app.log.info(`Lookback server listening on ${env.port} (storage=${env.storage.driver})`);

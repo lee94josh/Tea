@@ -128,12 +128,13 @@ export async function runResearch(data: ResearchJob): Promise<void> {
     await query(`update moments set status = 'researched' where id = $1`, [momentId]);
   }
 
-  // Extract Discover topics now (non-fatal) so they're ready the moment the
-  // photo finishes processing — and write the newspaper article for each new one.
+  // Extract Discover topics now (non-fatal). New topics drain through the
+  // single paced article coordinator (not per-topic fan-out — that hammered
+  // the API into rate limits).
   try {
     const newTopicIds = await extractAndStoreTopics(momentId);
-    for (const id of newTopicIds) {
-      await enqueue(JOBS.articleGenerate, { topicId: id });
+    if (newTopicIds.length > 0) {
+      await enqueue(JOBS.articleCoordinator, {}, { singletonKey: 'article-coord' });
     }
   } catch (err) {
     console.warn(`[research] topic extraction failed for ${momentId} (non-fatal):`, err);

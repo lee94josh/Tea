@@ -7,6 +7,8 @@
 import type { FastifyInstance } from 'fastify';
 import { query } from '../db';
 import { requireAuth } from '../auth';
+import { enqueue, JOBS } from '../queue';
+import { articlePauseInfo } from '../jobs/article';
 
 export interface PipelineStatus {
   photos: { total: number; processing: number; done: number; error: number };
@@ -17,10 +19,18 @@ export interface PipelineStatus {
   working: boolean;
   /** Coarse "minutes remaining" estimate for outstanding article work. */
   etaMinutes: number | null;
+  /** Generation paused because the Gemini key hit its quota. */
+  rateLimited: boolean;
+  /** Roughly when generation resumes (minutes), when rate limited. */
+  resumesInMinutes: number | null;
 }
 
 export function pipelineRoutes(app: FastifyInstance): void {
   app.get('/pipeline', { preHandler: requireAuth }, async () => {
+    // The app polls this frequently; use it to keep the article drain alive
+    // (singleton — no-op if a coordinator loop is already running).
+    void enqueue(JOBS.articleCoordinator, {}, { singletonKey: 'article-coord' }).catch(() => {});
+
     const photo = (
       await query<{ total: string; processing: string; done: string; error: string }>(`
         select count(*)::text total,
@@ -55,6 +65,7 @@ export function pipelineRoutes(app: FastifyInstance): void {
       `)
     ).rows[0]!;
 
+    const pause = articlePauseInfo();
     const photosProcessing = Number(photo.processing);
     const momentsActive = Number(moment.pending) + Number(moment.researching);
     const articlesPending = Number(article.pending);
@@ -82,6 +93,8 @@ export function pipelineRoutes(app: FastifyInstance): void {
       articles: { written: Number(article.written), pending: articlesPending },
       working,
       etaMinutes,
+      rateLimited: pause.rateLimited,
+      resumesInMinutes: pause.rateLimited ? Math.ceil(pause.resumesInSeconds / 60) : null,
     };
     return status;
   });

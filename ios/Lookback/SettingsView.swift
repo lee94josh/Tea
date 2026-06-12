@@ -106,12 +106,15 @@ struct SettingsView: View {
                         detail: s.articles.pending > 0 ? "\(s.articles.pending) being written" : nil)
 
                 HStack(spacing: 8) {
-                    if s.working {
+                    if s.isPaused {
+                        Image(systemName: "pause.circle.fill").foregroundStyle(.orange)
+                        Text(s.statusText).font(.footnote).foregroundStyle(.secondary)
+                    } else if s.working {
                         ProgressView().controlSize(.small)
-                        Text(s.etaText).font(.footnote).foregroundStyle(.secondary)
+                        Text(s.statusText).font(.footnote).foregroundStyle(.secondary)
                     } else {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text("Edition up to date").font(.footnote).foregroundStyle(.secondary)
+                        Text(s.statusText).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.top, 2)
@@ -123,8 +126,10 @@ struct SettingsView: View {
         } header: {
             Text("Under the hood")
         } footer: {
-            if let s = status, s.articles.pending > 0 {
-                Text("New articles are written one at a time after research. Pull to refresh the front page as they land — usually within \(s.etaText.replacingOccurrences(of: "remaining", with: "").trimmingCharacters(in: .whitespaces)).")
+            if let s = status, s.isPaused {
+                Text("The AI key hit its daily free-tier limit. Generation resumes automatically when the quota refreshes (or enable billing on the Gemini key to remove the cap).")
+            } else if let s = status, s.articles.pending > 0 {
+                Text("New articles are written one at a time after research. Pull to refresh the front page as they land.")
             } else {
                 Text("Photos → research → one article per worthy topic. This refreshes live while work is in flight.")
             }

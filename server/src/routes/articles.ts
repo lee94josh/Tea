@@ -10,7 +10,7 @@ import type { Article, PhotoRef } from '@lookback/shared';
 import { query } from '../db';
 import { requireAuth } from '../auth';
 import { storage } from '../storage';
-import { backfillArticles } from '../topics';
+import { enqueue, JOBS } from '../queue';
 
 interface ArticleJson {
   headline?: string;
@@ -21,10 +21,8 @@ interface ArticleJson {
 
 export function articleRoutes(app: FastifyInstance): void {
   app.get('/articles', { preHandler: requireAuth }, async () => {
-    // Kick generation for any article-less topics in the background.
-    void backfillArticles(5).catch((err) =>
-      console.warn('[articles] backfill failed:', err),
-    );
+    // Ensure the self-draining article coordinator is running (singleton).
+    void enqueue(JOBS.articleCoordinator, {}, { singletonKey: 'article-coord' }).catch(() => {});
 
     const rows = await query<{
       id: string;

@@ -47,9 +47,20 @@ struct PipelineStatus: Codable {
     let articles: Articles
     let working: Bool
     let etaMinutes: Int?
+    let rateLimited: Bool?
+    let resumesInMinutes: Int?
 
-    var etaText: String {
-        guard working, let m = etaMinutes else { return "All caught up" }
+    var isPaused: Bool { rateLimited == true }
+
+    var statusText: String {
+        if isPaused {
+            if let m = resumesInMinutes, m > 0 {
+                return m < 60 ? "Paused — daily AI limit reached. Retries in ~\(m) min."
+                              : "Paused — daily AI limit reached. Resumes when quota refreshes."
+            }
+            return "Paused — daily AI limit reached."
+        }
+        guard working, let m = etaMinutes else { return "Edition up to date" }
         if m < 60 { return "~\(m) min remaining" }
         let h = m / 60, r = m % 60
         return r == 0 ? "~\(h)h remaining" : "~\(h)h \(r)m remaining"
