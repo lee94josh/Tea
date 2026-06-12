@@ -1,7 +1,7 @@
 import SwiftUI
 import Photos
 
-/// Connection + sync. Lives behind the gear; the paper is the product.
+/// Connection + sync + under-the-hood pipeline status. Behind the gear.
 struct SettingsView: View {
     @AppStorage("appToken") private var token = ""
     @AppStorage("serverURL") private var serverURL = Config.defaultServerURL
@@ -9,9 +9,14 @@ struct SettingsView: View {
     @ObservedObject var sync: SyncEngine
     @Environment(\.dismiss) private var dismiss
 
+    @State private var status: PipelineStatus?
+    @State private var statusError: String?
+    @State private var pollTask: Task<Void, Never>?
+
     var body: some View {
         NavigationStack {
             Form {
+                pipelineSection
                 Section("Server") {
                     TextField("Server URL", text: $serverURL)
                         .autocorrectionDisabled()
@@ -77,6 +82,74 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .task { startPolling() }
+            .onDisappear { pollTask?.cancel() }
+            .onChange(of: sync.state) { _, _ in Task { await refreshStatus() } }
+        }
+    }
+
+    // MARK: under the hood
+
+    @ViewBuilder
+    private var pipelineSection: some View {
+        Section {
+            if let s = status {
+                StatRow(label: "Photos synced",
+                        value: "\(s.photos.done)",
+                        detail: s.photos.processing > 0 ? "\(s.photos.processing) processing" : nil)
+                StatRow(label: "Moments",
+                        value: "\(s.moments.done)/\(s.moments.total)",
+                        detail: (s.moments.pending + s.moments.researching) > 0
+                            ? "\(s.moments.pending + s.moments.researching) in research" : nil)
+                StatRow(label: "Articles written",
+                        value: "\(s.articles.written)",
+                        detail: s.articles.pending > 0 ? "\(s.articles.pending) being written" : nil)
+
+                HStack(spacing: 8) {
+                    if s.working {
+                        ProgressView().controlSize(.small)
+                        Text(s.etaText).font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Text("Edition up to date").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 2)
+            } else if let statusError {
+                Text(statusError).font(.footnote).foregroundStyle(.red)
+            } else {
+                HStack { ProgressView().controlSize(.small); Text("Loading status…").foregroundStyle(.secondary) }
+            }
+        } header: {
+            Text("Under the hood")
+        } footer: {
+            if let s = status, s.articles.pending > 0 {
+                Text("New articles are written one at a time after research. Pull to refresh the front page as they land — usually within \(s.etaText.replacingOccurrences(of: "remaining", with: "").trimmingCharacters(in: .whitespaces)).")
+            } else {
+                Text("Photos → research → one article per worthy topic. This refreshes live while work is in flight.")
+            }
+        }
+    }
+
+    private func startPolling() {
+        pollTask?.cancel()
+        pollTask = Task {
+            while !Task.isCancelled {
+                await refreshStatus()
+                // Poll faster while working, slower when idle.
+                let working = status?.working ?? false
+                try? await Task.sleep(for: .seconds(working ? 6 : 30))
+            }
+        }
+    }
+
+    private func refreshStatus() async {
+        guard !token.isEmpty else { return }
+        do {
+            status = try await API.pipeline()
+            statusError = nil
+        } catch {
+            if status == nil { statusError = error.localizedDescription }
         }
     }
 
@@ -84,5 +157,23 @@ struct SettingsView: View {
         if case .uploading = sync.state { return true }
         if case .scanning = sync.state { return true }
         return false
+    }
+}
+
+private struct StatRow: View {
+    let label: String
+    let value: String
+    var detail: String?
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(value).font(.body.monospacedDigit())
+                if let detail {
+                    Text(detail).font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }

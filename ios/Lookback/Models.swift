@@ -34,3 +34,24 @@ struct Article: Codable, Identifiable, Hashable {
         return date.formatted(.dateTime.month(.wide).day().year())
     }
 }
+
+/// Under-the-hood pipeline status (GET /pipeline).
+struct PipelineStatus: Codable {
+    struct Photos: Codable { let total, processing, done, error: Int }
+    struct Moments: Codable { let total, pending, researching, done: Int }
+    struct Topics: Codable { let total: Int }
+    struct Articles: Codable { let written, pending: Int }
+    let photos: Photos
+    let moments: Moments
+    let topics: Topics
+    let articles: Articles
+    let working: Bool
+    let etaMinutes: Int?
+
+    var etaText: String {
+        guard working, let m = etaMinutes else { return "All caught up" }
+        if m < 60 { return "~\(m) min remaining" }
+        let h = m / 60, r = m % 60
+        return r == 0 ? "~\(h)h remaining" : "~\(h)h \(r)m remaining"
+    }
+}

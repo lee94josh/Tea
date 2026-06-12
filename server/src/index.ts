@@ -27,6 +27,7 @@ import { feedRoutes } from './routes/feed';
 import { discoverRoutes } from './routes/discover';
 import { factsRoutes } from './routes/facts';
 import { articleRoutes } from './routes/articles';
+import { pipelineRoutes } from './routes/pipeline';
 
 async function main() {
   const app = Fastify({ logger: true, bodyLimit: 1024 * 1024 * 50 });
@@ -53,6 +54,7 @@ async function main() {
   discoverRoutes(app);
   factsRoutes(app);
   articleRoutes(app);
+  pipelineRoutes(app);
 
   // Single-origin deploy: serve the built PWA from this server when web/dist
   // exists (no separate static host, no CORS, PWA + API + images on one HTTPS

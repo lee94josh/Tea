@@ -19,16 +19,21 @@ enum API {
         return URL(string: serverURL + path)
     }
 
-    static func articles() async throws -> [Article] {
-        guard let url = URL(string: serverURL + "/articles") else { throw URLError(.badURL) }
+    /// Shared GET helper: auth header, status check, JSON decode.
+    private static func get<T: Decodable>(_ path: String) async throws -> T {
+        guard let url = URL(string: serverURL + path) else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8) ?? ""
             throw NSError(domain: "Lookback", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Server error: \(text.prefix(120))"])
         }
-        return try JSONDecoder().decode([Article].self, from: data)
+        return try JSONDecoder().decode(T.self, from: data)
     }
+
+    static func articles() async throws -> [Article] { try await get("/articles") }
+    static func pipeline() async throws -> PipelineStatus { try await get("/pipeline") }
 }
