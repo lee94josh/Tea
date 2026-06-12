@@ -15,6 +15,7 @@ export const JOBS = {
   clusterMoments: 'cluster:moments',
   analyzeMoment: 'analyze:moment',
   researchMoment: 'research:moment',
+  articleGenerate: 'article:generate',
   seedGenerate: 'seed:generate',
   notifyPush: 'notify:push',
   // Coordinators that fire batch stages once per-item work completes.

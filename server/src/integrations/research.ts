@@ -384,21 +384,35 @@ export class GeminiResearch {
     venueName: string | null,
   ): Promise<Array<{ name: string; kind: string; blurb: string }>> {
     const prompt = [
-      'From this photo-moment, list 1-3 TOPICS the person would genuinely want to learn',
-      'more about. The bar is high — only topics tied to THEIR specific experience:',
-      '- the named venue (restaurant, music hall, museum, bar)',
-      '- a named person: the chef, the artist whose work they saw, the performer they watched',
-      '- a named event (the show/exhibition/festival they attended)',
-      '- the neighborhood, if it is genuinely characterful',
-      '- a signature dish or named artwork they actually encountered',
+      'You decide which subjects from a photo-moment deserve a definitive feature',
+      'article in a personalized newspaper. The reader is a curious person who loves',
+      'food, design, art, history, and culture.',
       '',
-      'EXCLUDE generic background subjects that would apply to any city photo: fire',
-      'escapes, cast-iron architecture, brownstones, street furniture, generic food',
-      'categories ("bread", "cocktails"), generic concepts ("tasting menus", "live music").',
-      'Test: would a curious friend say "oh, tell me more about THAT"? If it is scenery',
-      'rather than the experience, drop it. Fewer, better topics — zero is acceptable.',
+      'THE INTENT THESIS — a photo is a vote of attention:',
+      '- Judge what the photo is OF (the deliberately framed subject), never what is',
+      '  merely IN it (backgrounds, logos, objects, decor).',
+      '- Specific beats generic: a named restaurant, a particular artwork or artist, a',
+      '  ceremony tradition, a storied landmark — yes. Categories, commodities, and',
+      '  brands (coffee, a MacBook, a logo on a mug) — no, ever.',
+      '- Effort implies intent: places traveled to, events attended, meals sought out.',
+      '  Ambient daily life (a desk, a commute, a kitchen counter) is not effort.',
+      '- The subject must reward 500 words of curiosity: a history, a maker, a craft,',
+      '  a tradition. If the best article would be encyclopedia boilerplate, drop it.',
       '',
-      'Each topic needs:',
+      'CANONICAL CALLS (follow these exactly):',
+      '- Korean wedding ceremony in hanbok → ARTICLE: the ceremony tradition',
+      '- mug with a NASA logo on a desk → NOTHING (incidental logo ≠ interest in NASA)',
+      '- tasting menu at a named restaurant → ONE topic: the restaurant (dishes fold in)',
+      '- a painting photographed at a museum → ARTICLE: the artist / the work',
+      '- MacBook and tea on a desk → NOTHING (not Apple, not Steve Jobs)',
+      '- concert at a venue → ARTICLE: the performer; the venue too only if storied',
+      "- a tattoo of Hokusai's Great Wave → ARTICLE: the artwork",
+      '- skyline / brownstones / fire escapes / street scenery → NOTHING',
+      '- receipt, screenshot, whiteboard → NOTHING',
+      '- close-up of a distinctive cultural dish → prefer the venue as the one topic;',
+      '  the dish tradition only when it is unmistakably the story itself',
+      '',
+      'Output 0-3 topics — zero is often the correct answer. Each topic needs:',
       '- name: the proper noun or concrete named subject',
       '- kind: place | person | artwork | food | event | history | other',
       '- blurb: ONE intriguing sentence grounded in the data below (no invention).',
@@ -533,6 +547,76 @@ export class GeminiResearch {
     });
     const text = (res.text ?? '').replace(/```(?:json)?/gi, '').trim();
     return { text, usedSearch: true };
+  }
+
+  /**
+   * The newspaper: ONE definitive ~500-word feature article per topic,
+   * search-grounded, written in the reader's personal context. Write-once.
+   */
+  async writeArticle(
+    topic: { name: string; kind: string | null },
+    context: { venueName: string | null; date: string | null; facts: string[]; blurb: string | null },
+  ): Promise<{ headline: string; dek: string; body_paragraphs: string[] } | null> {
+    const prompt = [
+      `Write the single definitive feature article about: ${topic.name}${topic.kind ? ` (${topic.kind})` : ''}.`,
+      'It runs in a personalized newspaper generated from the reader\'s own photos.',
+      'Reader context (weave it in naturally, second person, once or twice — not a gimmick):',
+      context.venueName ? `- they were at ${context.venueName}` : '',
+      context.date ? `- on ${context.date}` : '',
+      context.blurb ? `- why it surfaced: ${context.blurb}` : '',
+      context.facts.length ? `Verified facts already known: ${context.facts.join(' | ')}` : '',
+      '',
+      'Requirements:',
+      '- ONE cohesive article covering everything worth knowing — history, the people,',
+      '  the design, the food or work itself, why it matters. Never split into',
+      '  sub-articles; this is the only article that will ever exist on this topic.',
+      '- ~500 words across 5-8 paragraphs.',
+      '- VOICE: New York Times sparseness as the baseline — declarative, concrete,',
+      '  every sentence carrying information — with about 20% New Yorker in the',
+      '  structure: a scene or telling detail to open, one well-placed turn, an ending',
+      '  that lands rather than summarizes. NEVER flowery, kitschy, or precious; no',
+      '  purple adjectives, no "nestled", no "hidden gem", no exclamation marks.',
+      '- Use Google Search to verify and to find the genuinely fascinating material.',
+      '- headline: NYT-style — specific and quietly evocative, not clickbait.',
+      '- dek: one-sentence standfirst under the headline.',
+      '',
+      'Return ONLY JSON: { "headline": "...", "dek": "...", "body_paragraphs": ["..."] }',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    // Search-grounded; retry once on empty (same flakiness as deepDive).
+    let text = '';
+    for (let attempt = 0; attempt < 2 && !text.trim(); attempt++) {
+      const res = await this.ai.models.generateContent({
+        model: env.gemini.visionModel,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { tools: [{ googleSearch: {} }], temperature: 0.6 },
+      });
+      text = res.text ?? '';
+    }
+    const cleaned = text.replace(/```(?:json)?/gi, '').trim();
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      try {
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        parsed = match ? JSON.parse(match[0]) : {};
+      } catch {
+        parsed = {};
+      }
+    }
+    const arr = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    const body = arr(parsed.body_paragraphs);
+    if (body.length === 0) return null; // don't store junk; backfill retries later
+    return {
+      headline:
+        typeof parsed.headline === 'string' && parsed.headline ? parsed.headline : topic.name,
+      dek: typeof parsed.dek === 'string' ? parsed.dek : '',
+      body_paragraphs: body,
+    };
   }
 
   /** Search-grounded deep dive on a topic, in the user's personal context. */

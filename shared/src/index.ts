@@ -319,6 +319,23 @@ export interface FunFact {
   entities: FactEntity[];
 }
 
+/** `GET /articles` item — one definitive feature article per topic (the paper). */
+export interface Article {
+  id: string; // topic id
+  momentId: string;
+  headline: string;
+  dek: string;
+  bodyParagraphs: string[];
+  topicName: string;
+  kind: string | null;
+  venueName: string | null;
+  /** When the underlying moment happened (ISO), for the dateline. */
+  momentDate: string | null;
+  /** When the article was written (ISO) — feed is ordered by this. */
+  generatedAt: string;
+  photos: PhotoRef[];
+}
+
 /** `POST /discover/:id/dive` — cached search-grounded deep dive. */
 export interface DeepDive {
   title: string;

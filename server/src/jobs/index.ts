@@ -9,6 +9,7 @@ import { runEmbed } from './embed';
 import { runCheckCluster, runClusterMoments } from './cluster';
 import { runAnalyze } from './analyze';
 import { runResearch } from './research';
+import { runArticleGenerate } from './article';
 import { runSeed } from './seed';
 import { runCheckNotify, runNotifyPush } from './notify';
 
@@ -42,6 +43,7 @@ export async function registerJobs(boss: PgBoss): Promise<void> {
   await register(boss, JOBS.clusterMoments, runClusterMoments, { batchSize: 1 });
   await register(boss, JOBS.analyzeMoment, runAnalyze, { batchSize: 1 });
   await register(boss, JOBS.researchMoment, runResearch, { batchSize: 1 });
+  await register(boss, JOBS.articleGenerate, runArticleGenerate, { batchSize: 1 });
   await register(boss, JOBS.seedGenerate, runSeed, { batchSize: 1 });
   await register(boss, JOBS.checkNotify, runCheckNotify, { batchSize: 1 });
   await register(boss, JOBS.notifyPush, runNotifyPush, { batchSize: 1 });

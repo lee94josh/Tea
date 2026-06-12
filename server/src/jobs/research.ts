@@ -129,10 +129,15 @@ export async function runResearch(data: ResearchJob): Promise<void> {
   }
 
   // Extract Discover topics now (non-fatal) so they're ready the moment the
-  // photo finishes processing — no lazy work on the Discover page.
-  await extractAndStoreTopics(momentId).catch((err) =>
-    console.warn(`[research] topic extraction failed for ${momentId} (non-fatal):`, err),
-  );
+  // photo finishes processing — and write the newspaper article for each new one.
+  try {
+    const newTopicIds = await extractAndStoreTopics(momentId);
+    for (const id of newTopicIds) {
+      await enqueue(JOBS.articleGenerate, { topicId: id });
+    }
+  } catch (err) {
+    console.warn(`[research] topic extraction failed for ${momentId} (non-fatal):`, err);
+  }
 
   await enqueue(JOBS.seedGenerate, { momentId });
 }

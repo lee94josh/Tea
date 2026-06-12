@@ -7,6 +7,7 @@
 import type { MomentAnalysis, MomentResearch } from '@lookback/shared';
 import { query } from './db';
 import { research } from './integrations/research';
+import { enqueue, JOBS } from './queue';
 import { env } from './env';
 
 /** Has this moment already had topic extraction attempted? */
@@ -18,9 +19,9 @@ async function alreadyExtracted(momentId: string): Promise<boolean> {
   return Number(r.rows[0]?.n ?? '0') > 0;
 }
 
-export async function extractAndStoreTopics(momentId: string): Promise<void> {
-  if (!env.gemini.apiKey) return;
-  if (await alreadyExtracted(momentId)) return;
+export async function extractAndStoreTopics(momentId: string): Promise<string[]> {
+  if (!env.gemini.apiKey) return [];
+  if (await alreadyExtracted(momentId)) return [];
 
   const m = (
     await query<{
@@ -29,8 +30,9 @@ export async function extractAndStoreTopics(momentId: string): Promise<void> {
       venue_name: string | null;
     }>('select analysis, research, venue_name from moments where id = $1', [momentId])
   ).rows[0];
-  if (!m || !m.analysis) return;
+  if (!m || !m.analysis) return [];
 
+  const newTopicIds: string[] = [];
   const topics = await research().extractTopics(m.analysis, m.research, m.venue_name);
   for (const t of topics) {
     // Global consolidation: one topic per name across ALL moments.
@@ -40,11 +42,12 @@ export async function extractAndStoreTopics(momentId: string): Promise<void> {
       [t.name],
     );
     if (Number(dupe.rows[0]?.n ?? '0') > 0) continue;
-    await query(
+    const ins = await query<{ id: string }>(
       `insert into discover_topics (moment_id, name, kind, blurb)
-       values ($1,$2,$3,$4) on conflict do nothing`,
+       values ($1,$2,$3,$4) on conflict do nothing returning id`,
       [momentId, t.name, t.kind, t.blurb],
     );
+    if (ins.rows[0]) newTopicIds.push(ins.rows[0].id);
   }
   // Sentinel so this moment is never re-extracted, even if all topics deduped.
   await query(
@@ -52,6 +55,7 @@ export async function extractAndStoreTopics(momentId: string): Promise<void> {
      values ($1, '__none__', 'other', null) on conflict do nothing`,
     [momentId],
   );
+  return newTopicIds;
 }
 
 /** Backfill moments that finished before pipeline extraction existed. Converges. */
@@ -66,9 +70,27 @@ export async function backfillTopics(limit: number): Promise<void> {
   `, [limit]);
   for (const row of missing.rows) {
     try {
-      await extractAndStoreTopics(row.id);
+      const newIds = await extractAndStoreTopics(row.id);
+      for (const id of newIds) {
+        await enqueue(JOBS.articleGenerate, { topicId: id });
+      }
     } catch (err) {
       console.warn(`[discover] backfill failed for ${row.id} (non-fatal):`, err);
     }
+  }
+}
+
+/** Enqueue article generation for topics that don't have one yet (write-once,
+ *  converges; used by the /articles route so the paper self-populates). */
+export async function backfillArticles(limit: number): Promise<void> {
+  if (!env.gemini.apiKey) return;
+  const missing = await query<{ id: string }>(
+    `select id from discover_topics
+      where name <> '__none__' and article is null
+      order by created_at desc limit $1`,
+    [limit],
+  );
+  for (const row of missing.rows) {
+    await enqueue(JOBS.articleGenerate, { topicId: row.id }, { singletonKey: `article-${row.id}` });
   }
 }
