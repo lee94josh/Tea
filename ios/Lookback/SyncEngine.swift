@@ -1,5 +1,6 @@
 import Photos
 import Foundation
+import Combine // ObservableObject/@Published live here
 
 /// Phase 2: incremental sync. Finds photos not yet uploaded, sends originals
 /// (EXIF intact) to the existing /upload endpoint one at a time, and records

@@ -1,6 +1,7 @@
 import Photos
 import CoreLocation
 import UniformTypeIdentifiers
+import Combine // ObservableObject/@Published live here
 
 /// One photo from the library, with the metadata that matters to Lookback.
 struct PhotoItem: Identifiable {
@@ -47,8 +48,10 @@ final class PhotoLibrary: ObservableObject {
     func originalData(for asset: PHAsset) async -> (data: Data, filename: String, mime: String)? {
         let resources = PHAssetResource.assetResources(for: asset)
         let filename = resources.first?.originalFilename ?? "photo.jpg"
-        let mime = resources.first?.uniformTypeIdentifier
-            .flatMap { UTType($0)?.preferredMIMEType } ?? "image/jpeg"
+        // Two steps: chaining .flatMap directly would map over the String's
+        // Characters instead of the Optional.
+        let typeIdentifier: String? = resources.first?.uniformTypeIdentifier
+        let mime = typeIdentifier.flatMap { UTType($0)?.preferredMIMEType } ?? "image/jpeg"
 
         return await withCheckedContinuation { continuation in
             let options = PHImageRequestOptions()
