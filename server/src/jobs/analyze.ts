@@ -95,8 +95,13 @@ export async function runAnalyze(data: AnalyzeJob): Promise<void> {
       [momentId, analysis.title, JSON.stringify(analysis), venueName],
     );
 
-    // Research before seeding — slow is fine, the pipeline is async.
-    await enqueue(JOBS.researchMoment, { momentId });
+    // Research before seeding — slow is fine, the pipeline is async. Skipped
+    // when generation is paused (PIPELINE_GENERATE_ARTICLES=0): we still get the
+    // caption + embedding (the cheap half) for inspiration mode, without paying
+    // for Pro research and article writing.
+    if (env.pipeline.generateArticles) {
+      await enqueue(JOBS.researchMoment, { momentId });
+    }
   } catch (err) {
     await query(`update moments set status = 'error' where id = $1`, [momentId]);
     throw err;

@@ -58,13 +58,22 @@ struct SettingsView: View {
                             EmptyView()
                         }
                         Button("Sync now") {
+                            sync.maxPerRun = 25
+                            Task { await sync.sync(serverURL: serverURL, token: token, library: library) }
+                        }
+                        .disabled(token.isEmpty || isSyncing)
+
+                        Button("Index everything in window") {
+                            // One-shot bulk backfill: drain the whole window so
+                            // there's a big, fresh pool for inspiration mode.
+                            sync.maxPerRun = 5000
                             Task { await sync.sync(serverURL: serverURL, token: token, library: library) }
                         }
                         .disabled(token.isEmpty || isSyncing)
                     } header: {
                         Text("Sync")
                     } footer: {
-                        Text("New stories are researched and written after photos upload — give the paper a few minutes, then pull to refresh.")
+                        Text("“Index everything” uploads every photo in the last \(sync.syncWindowDays) days for inspiration mode. New feed stories are researched after upload — give it a few minutes, then pull to refresh.")
                     }
 
                     Section {

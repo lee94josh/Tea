@@ -76,6 +76,13 @@ export const env = {
     writerModel: opt('ANTHROPIC_WRITER_MODEL', 'claude-sonnet-4-6'),
   },
 
+  pipeline: {
+    /** When 0, analyzed moments do NOT chain into research/articles (the pricey
+     *  half). Lets us index photos cheaply for inspiration mode without paying
+     *  for Pro research + article writing. Captions + embeddings still run. */
+    generateArticles: num('PIPELINE_GENERATE_ARTICLES', 1) !== 0,
+  },
+
   articles: {
     /** Topics scoring below this are shelved, not written (0–100). */
     scoreMin: num('ARTICLE_SCORE_MIN', 50),

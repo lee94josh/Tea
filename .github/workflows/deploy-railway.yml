@@ -128,6 +128,7 @@ jobs:
             --arg vp "$VPUB" --arg vk "$VPRIV" \
             '{APP_TOKEN:$t, GEMINI_API_KEY:$g, DATABASE_URL:$db,
               STORAGE_DRIVER:"disk", STORAGE_DISK_PATH:"/data",
+              PIPELINE_GENERATE_ARTICLES:"0",
               VAPID_PUBLIC_KEY:$vp, VAPID_PRIVATE_KEY:$vk,
               VAPID_SUBJECT:"mailto:lookback@users.noreply.github.com"}
              + (if $a != "" then {ANTHROPIC_API_KEY:$a} else {} end)')

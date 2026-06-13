@@ -25,7 +25,7 @@ final class SyncEngine: NSObject, ObservableObject {
     @Published var pendingCount = 0
 
     /// Only consider photos taken in the last N days (cost guardrail).
-    var syncWindowDays = 100
+    var syncWindowDays = 150
     /// Max uploads per run (cost guardrail; run sync again for more).
     var maxPerRun = 25
 
