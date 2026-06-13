@@ -1,11 +1,12 @@
 import SwiftUI
 import UIKit
 
-/// The home screen: not a newspaper but a canvas. Articles are scattered across
-/// a plane wider and taller than the screen; you open at the top-center (the
-/// strongest pieces) and pan in any direction to roam. Each card anchors on a
-/// photo, wears its worthiness score in little circles, a category bubble, and
-/// a headline set in mixed display fonts — the magazine-index look.
+/// The home screen: a vertical editorial feed. One composed block per story —
+/// score circles, a small kind label, a centered headline in mixed display
+/// faces, then the photo (half of them lifted out of their backgrounds).
+/// The structure repeats; the variety lives in type, photo treatment, and
+/// scale. No photo ever appears twice: when two topics share a moment's
+/// photos, each takes a different key photo.
 struct CanvasHomeView: View {
     @State private var articles: [Article] = []
     @State private var loading = false
@@ -13,27 +14,23 @@ struct CanvasHomeView: View {
     @State private var lastLoaded: Date?
 
     var body: some View {
-        GeometryReader { geo in
-            let placements = Self.layout(articles, screenW: geo.size.width)
-            let canvas = Self.canvasSize(placements, screenW: geo.size.width)
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                ZStack(alignment: .topLeading) {
-                    ForEach(placements) { p in
-                        NavigationLink(value: p.article) {
-                            ArticleCard(article: p.article, seed: p.seed,
-                                        width: p.size.width)
-                        }
-                        .buttonStyle(CardPress())
-                        .rotationEffect(.degrees(p.rotation))
-                        .position(p.center)
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 0) {
+                ForEach(Self.makeEntries(articles)) { entry in
+                    NavigationLink(value: entry.article) {
+                        FeedCard(article: entry.article, seed: entry.seed,
+                                 keyPhoto: entry.keyPhoto)
                     }
+                    .buttonStyle(CardPress())
+                    .padding(.bottom, 84 + CGFloat(entry.seed % 32))
                 }
-                .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
             }
-            .defaultScrollAnchor(UnitPoint(x: 0.5, y: 0))
-            .background(Typeface.paper.ignoresSafeArea())
-            .overlay { stateOverlay }
+            .padding(.top, 32)
+            .padding(.bottom, 60)
+            .frame(maxWidth: .infinity)
         }
+        .background(Typeface.paper.ignoresSafeArea())
+        .overlay { stateOverlay }
         .navigationDestination(for: Article.self) { ArticleReaderView(article: $0) }
         .toolbarBackground(Typeface.paper, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -52,7 +49,7 @@ struct CanvasHomeView: View {
             ProgressView().controlSize(.large).tint(Typeface.ink)
         } else if articles.isEmpty {
             message("No stories yet",
-                    "Sync some photos from the gear, and cards will appear here as research finishes.")
+                    "Sync some photos from the gear, and stories will appear here as research finishes.")
         }
     }
 
@@ -85,83 +82,66 @@ struct CanvasHomeView: View {
         }
     }
 
-    // MARK: layout
+    // MARK: feed assembly
 
-    struct Placement: Identifiable {
-        let id: String
+    struct Entry: Identifiable {
         let article: Article
-        let center: CGPoint
-        let size: CGSize
         let seed: Int
-        let rotation: Double
+        /// The one photo this story leads with — globally unique in the feed.
+        /// nil = every photo in this story already appeared above; run text-only.
+        let keyPhoto: PhotoRef?
+        var id: String { article.id }
     }
 
-    /// Masonry over three columns on a plane ~2.1× the screen wide. Entries are
-    /// small and the space between them is large — the reference index works
-    /// because the whitespace outweighs the content. Columns start staggered so
-    /// nothing reads as a row; the strongest article seeds the center column
-    /// (the top-center start); the rest drop into whichever column is shortest.
-    static func layout(_ articles: [Article], screenW: CGFloat) -> [Placement] {
-        guard !articles.isEmpty, screenW > 0 else { return [] }
-        let canvasW = screenW * 2.4
-        let cols = [0.18, 0.5, 0.82].map { canvasW * CGFloat($0) }
-        let topPad: CGFloat = 120 // the masthead is gone — content owns the top
-        var colY: [CGFloat] = [topPad + 130, topPad, topPad + 230]
-
+    /// Best stories first, and every photo used at most once across the whole
+    /// feed: each story takes its first not-yet-used photo as its key image.
+    static func makeEntries(_ articles: [Article]) -> [Entry] {
         let ranked = articles.sorted { ($0.score ?? -1) > ($1.score ?? -1) }
-        var out: [Placement] = []
-        for (i, a) in ranked.enumerated() {
-            let seed = stableSeed(a.id)
-            // Three card sizes, so the canvas reads hand-set, not gridded.
-            let cardW = ([190, 220, 248] as [CGFloat])[seed % 3]
-            let h = estimatedHeight(a, seed: seed)
-            let col = i == 0 ? 1 : (colY.indices.min { colY[$0] < colY[$1] } ?? 0)
-            let jitterX = CGFloat((seed % 25) - 12) // small — never enough to touch a neighbor
-            let center = CGPoint(x: cols[col] + jitterX, y: colY[col] + h / 2)
-            let rot = (Double(seed % 17) - 8) / 10.0 // ±0.8°
-            out.append(Placement(id: a.id, article: a, center: center,
-                                 size: CGSize(width: cardW, height: h), seed: seed, rotation: rot))
-            // Roughly 3:1 content-to-air — generous but not empty.
-            colY[col] += h + max(72, h * 0.375) + CGFloat(seed % 24)
+        var used = Set<String>()
+        return ranked.map { a in
+            var pick: PhotoRef?
+            for p in a.photos where !used.contains(p.id) {
+                pick = p
+                used.insert(p.id)
+                break
+            }
+            return Entry(article: a, seed: stableSeed(a.id), keyPhoto: pick)
         }
-        return out
     }
 
-    static func canvasSize(_ placements: [Placement], screenW: CGFloat) -> CGSize {
-        let bottom = placements.map { $0.center.y + $0.size.height / 2 }.max() ?? screenW
-        return CGSize(width: screenW * 2.4, height: bottom + 200)
-    }
-
-    /// What the card will actually occupy, computed from its content (line
-    /// count, image treatment) so entries never collide — fixed guesses did.
-    static func estimatedHeight(_ a: Article, seed: Int) -> CGFloat {
-        let lines = MagazineHeadline.split(indexTitle(a.headline).uppercased())
-        let size = MagazineHeadline.size(for: lines)
-        var h: CGFloat = 25 + 6 + 16 + 6 // score badge + kind label + spacing
-        h += CGFloat(lines.count) * size * 1.18
-        if a.photos.first != nil {
-            let stamp = ([80, 98, 115] as [CGFloat])[seed % 3]
-            h += 12 + (seed % 3 == 0 ? stamp + 26 : stamp) // cutouts float a little taller
-        }
-        return h
-    }
-
-    /// An index entry is a title, not a sentence. Cut at the first clause break
-    /// ("Wimbledon Centre Court, and the year-round…" → "WIMBLEDON CENTRE
-    /// COURT"); the full headline still opens the reader.
+    /// An index entry is a title, not a sentence. Cut at the first clause
+    /// break; failing that, before the first "and"; never end on a connective
+    /// ("…THE SYMBOLISM OF" is a typesetting crime). The full headline still
+    /// opens the reader.
     static func indexTitle(_ headline: String) -> String {
         let breaks: Set<Character> = [",", ":", ";", "—", "–"]
-        if let idx = headline.firstIndex(where: { breaks.contains($0) }) {
-            let clause = headline[..<idx].trimmingCharacters(in: .whitespaces)
-            if clause.split(separator: " ").count >= 2 { return clause }
+        var words: [String]
+        if let idx = headline.firstIndex(where: { breaks.contains($0) }),
+           headline[..<idx].split(separator: " ").count >= 2 {
+            words = headline[..<idx].split(separator: " ").map(String.init)
+        } else {
+            words = headline.split(separator: " ").map(String.init)
+            // "X and Y" headlines: the first half is the title.
+            if let cut = words.dropFirst(2).firstIndex(where: {
+                $0.lowercased() == "and" || $0 == "&"
+            }), cut >= 3 {
+                words = Array(words[..<cut])
+            } else if words.count > 8 {
+                words = Array(words.prefix(8))
+            }
         }
-        let words = headline.split(separator: " ")
-        return words.count <= 7 ? headline : words.prefix(7).joined(separator: " ")
+        let connectives: Set<String> = ["and", "of", "the", "a", "an", "at", "in",
+                                        "on", "for", "with", "to", "its", "from"]
+        while words.count > 2, let last = words.last,
+              connectives.contains(last.lowercased()) {
+            words.removeLast()
+        }
+        return words.joined(separator: " ")
     }
 }
 
-/// Deterministic 31-bit hash (FNV-1a) so a card's layout, fonts, and image
-/// treatment stay put across launches (Swift's String.hashValue is per-process).
+/// Deterministic 31-bit hash (FNV-1a) so a story's fonts and photo treatment
+/// stay put across launches (Swift's String.hashValue is per-process).
 func stableSeed(_ s: String) -> Int {
     var h: UInt64 = 1469598103934665603
     for b in s.utf8 { h = (h ^ UInt64(b)) &* 1099511628211 }
@@ -171,67 +151,54 @@ func stableSeed(_ s: String) -> Int {
 private struct CardPress: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .opacity(configuration.isPressed ? 0.9 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
-// MARK: - One card
+// MARK: - One story block
 
-private struct ArticleCard: View {
+/// The block the whole feed is built from — the centered composition:
+/// score circles, kind, headline, photo. Always in that order; the eye
+/// learns the rhythm and the content carries the variety.
+private struct FeedCard: View {
     let article: Article
     let seed: Int
-    let width: CGFloat
-
-    /// ~40% of entries are center-set, like the reference index — the mix of
-    /// ragged-left and centered is most of what makes it feel hand-composed.
-    private var centered: Bool { seed % 5 >= 3 }
+    let keyPhoto: PhotoRef?
 
     var body: some View {
-        let imageOnTop = seed % 2 == 0
-        let wantsCutout = seed % 3 == 0
-        VStack(alignment: centered ? .center : .leading, spacing: 12) {
-            if imageOnTop {
-                anchor(wantsCutout)
-                textBlock
-            } else {
-                textBlock
-                anchor(wantsCutout)
+        VStack(spacing: 0) {
+            // No score yet → no badge. Honest beats decorative.
+            if let score = article.score {
+                ScoreBadge(value: score)
+                    .padding(.bottom, 14)
             }
-        }
-        .frame(width: width, alignment: .top)
-    }
-
-    private var textBlock: some View {
-        VStack(alignment: centered ? .center : .leading, spacing: 6) {
-            ScoreBadge(value: article.score ?? (40 + seed % 55))
             Text(kindLabel(article.kind))
-                .font(Typeface.serif(13))
-                .foregroundStyle(Typeface.ink.opacity(0.65))
-            MagazineHeadline(text: CanvasHomeView.indexTitle(article.headline),
-                             seed: seed, centered: centered)
+                .font(Typeface.serif(15))
+                .foregroundStyle(Typeface.ink.opacity(0.55))
+                .padding(.bottom, 10)
+            MagazineHeadline(text: CanvasHomeView.indexTitle(article.headline), seed: seed)
+                .padding(.bottom, 22)
+            photo
         }
+        .frame(maxWidth: 380)
+        .padding(.horizontal, 24)
     }
 
-    /// Stamp-sized, like the reference — the photo is a marginal note beside
-    /// the title, not a billboard. Stamps come in three heights, drift to
-    /// either edge (or sit centered), and only every other one carries the
-    /// category pill (the tiny kind label above the title already says it).
-    @ViewBuilder private func anchor(_ wantsCutout: Bool) -> some View {
-        if let url = API.absoluteURL(article.photos.first?.visionUrl ?? article.photos.first?.thumbUrl) {
-            let stampH = ([80, 98, 115] as [CGFloat])[seed % 3]
-            AnchorImage(url: url, wantsCutout: wantsCutout,
-                        width: min(190, width * 0.82), height: stampH,
-                        pill: seed % 2 == 1 ? kindLabel(article.kind).uppercased() : nil)
-                .frame(maxWidth: .infinity,
-                       alignment: centered ? .center : (seed % 4 < 2 ? .leading : .trailing))
+    @ViewBuilder private var photo: some View {
+        if let keyPhoto,
+           let url = API.absoluteURL(keyPhoto.visionUrl ?? keyPhoto.thumbUrl) {
+            AnchorImage(url: url,
+                        wantsCutout: seed % 2 == 0, // half the feed floats free
+                        height: ([210, 260, 330] as [CGFloat])[seed % 3],
+                        pill: kindLabel(article.kind).uppercased())
         }
     }
 }
 
-/// Two-digit worthiness score, each digit in its own ink circle (zero-padded so
-/// it always reads as a pair, like the magazine page numbers).
+/// Two-digit worthiness score, each digit in its own ink circle (zero-padded
+/// so it always reads as a pair, like magazine page numbers).
 private struct ScoreBadge: View {
     let value: Int
     var body: some View {
@@ -240,53 +207,62 @@ private struct ScoreBadge: View {
         HStack(spacing: 5) {
             ForEach(Array(digits.enumerated()), id: \.offset) { _, d in
                 Text(String(d))
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(Typeface.paper)
-                    .frame(width: 25, height: 25)
+                    .frame(width: 27, height: 27)
                     .background(Circle().fill(Typeface.ink))
             }
         }
     }
 }
 
-/// Headline split into short stacked lines, with the last line set in an accent
-/// face (serif-italic or bitmap) over a grotesque/condensed base — a font mix
-/// per card, chosen deterministically so it never reshuffles.
+/// Centered headline in short stacked lines, the last line in an accent face
+/// over a display base — a deterministic font mix per story, drawn from the
+/// full set of faces so the feed never feels templated.
 private struct MagazineHeadline: View {
     let text: String
     let seed: Int
-    var centered: Bool = false
 
     var body: some View {
         let lines = Self.split(text.uppercased())
         let size = Self.size(for: lines)
-        let base: HeadlineFace = seed % 5 == 0 ? .condensed : .grotesque
-        let accent: HeadlineFace = seed % 2 == 0 ? .serifItalic : .pixel
-        VStack(alignment: centered ? .center : .leading, spacing: 0) {
+        let (base, accent) = Self.pairing(seed)
+        VStack(spacing: 1) {
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                 let isLast = i == lines.count - 1 && lines.count > 1
                 Text(line)
-                    .font((isLast ? accent : base).font(size))
+                    .font((isLast ? accent : base).font(isLast ? size * 0.92 : size))
                     .foregroundStyle(Typeface.ink)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6) // a long line shrinks, never wraps —
-                                             // wrapping would break the height estimate
+                    .minimumScaleFactor(0.6) // long lines shrink, never wrap
             }
+        }
+        .multilineTextAlignment(.center)
+    }
+
+    /// Five pairings that all contrast well; the seed picks one for life.
+    static func pairing(_ seed: Int) -> (HeadlineFace, HeadlineFace) {
+        switch seed % 5 {
+        case 0: return (.grotesque, .pixel)
+        case 1: return (.condensed, .serifItalic)
+        case 2: return (.grotesque, .serifItalic)
+        case 3: return (.serif, .pixel)
+        default: return (.condensed, .pixel)
         }
     }
 
     static func size(for lines: [String]) -> CGFloat {
         let longest = lines.map(\.count).max() ?? 0
-        if longest > 12 { return 19 }
-        if longest > 8 { return 23 }
-        return 26
+        if longest > 14 { return 23 }
+        if longest > 10 { return 27 }
+        return 31
     }
 
-    /// Greedy balance into at most three lines, ~13 chars each.
+    /// Greedy balance into at most three lines, ~14 chars each.
     static func split(_ s: String) -> [String] {
         let words = s.split(separator: " ").map(String.init)
         guard words.count > 1 else { return words }
-        let maxLines = min(3, max(1, Int((Double(s.count) / 13.0).rounded())))
+        let maxLines = min(3, max(1, Int((Double(s.count) / 14.0).rounded())))
         let budget = Int(ceil(Double(s.count) / Double(maxLines)))
         var lines: [String] = []
         var cur = ""
@@ -305,13 +281,12 @@ private struct MagazineHeadline: View {
     }
 }
 
-/// The anchor photo: a framed inset, or — when chosen and the lift succeeds — a
-/// background-knocked-out cut-out floating on the canvas. A category bubble
-/// pins to the top-left.
+/// The story's photo: a clean framed image, or — for half the feed, when the
+/// on-device lift succeeds — a subject floating free on the paper. Framed
+/// photos carry the category pill half-off their corner; cutouts stay bare.
 private struct AnchorImage: View {
     let url: URL
     let wantsCutout: Bool
-    let width: CGFloat
     let height: CGFloat
     let pill: String?
 
@@ -324,10 +299,8 @@ private struct AnchorImage: View {
                 Image(uiImage: cutout)
                     .resizable()
                     .scaledToFit()
-                    // Both axes capped — a wide subject must not bleed into
-                    // the neighboring column.
-                    .frame(maxWidth: width + 16, maxHeight: height + 24)
-                    .shadow(color: .black.opacity(0.18), radius: 7, y: 4)
+                    .frame(maxWidth: 320, maxHeight: height)
+                    .shadow(color: .black.opacity(0.16), radius: 9, y: 5)
             } else {
                 AsyncImage(url: url) { phase in
                     if case .success(let img) = phase {
@@ -336,11 +309,13 @@ private struct AnchorImage: View {
                         Rectangle().fill(Typeface.ink.opacity(0.06))
                     }
                 }
-                .frame(width: width, height: height)
-                .clipShape(RoundedRectangle(cornerRadius: 2))
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(alignment: .topLeading) {
+                    if let pill { BubblePill(text: pill).offset(x: -10, y: -11) }
+                }
             }
-            // Half-on the corner, like the reference's tags.
-            if let pill { BubblePill(text: pill).offset(x: -9, y: -9) }
         }
         .task {
             guard wantsCutout, !tried else { return }
