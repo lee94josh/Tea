@@ -27,7 +27,7 @@ struct ContentView: View {
                 if token.isEmpty {
                     FirstRunView(token: $token, serverURL: $serverURL, library: library)
                 } else {
-                    PaperView()
+                    CanvasHomeView()
                 }
             }
             .toolbar {

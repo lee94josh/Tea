@@ -76,6 +76,8 @@ struct ArticleReaderView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .background(Typeface.paper.ignoresSafeArea())
+        .toolbarBackground(Typeface.paper, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
     }
 

@@ -81,6 +81,7 @@ export function articleRoutes(app: FastifyInstance): void {
         momentDate: r.started_at ? new Date(r.started_at).toISOString() : null,
         generatedAt: a.generated_at ?? new Date(0).toISOString(),
         photos,
+        score: r.score,
         predictedTier: r.score != null ? tierForScore(r.score) : null,
         userRating: r.user_rating,
       });

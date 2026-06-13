@@ -23,6 +23,8 @@ struct Article: Codable, Identifiable, Hashable {
     let momentDate: String?
     let generatedAt: String?
     let photos: [PhotoRef]
+    /// The judge's 0–100 worthiness score — the canvas badge.
+    let score: Int?
     /// The judge's editorial tier (1 best … 5), shown so the reader can correct it.
     let predictedTier: Int?
     /// The reader's own 1–5 verdict, once rated.

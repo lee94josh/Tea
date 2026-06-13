@@ -334,6 +334,8 @@ export interface Article {
   /** When the article was written (ISO) — feed is ordered by this. */
   generatedAt: string;
   photos: PhotoRef[];
+  /** The judge's 0–100 worthiness score (the canvas badge), if scored. */
+  score: number | null;
   /** The judge's editorial tier for this topic (1 best … 5), if scored. */
   predictedTier: number | null;
   /** The reader's own 1–5 verdict, once they've rated it. */
