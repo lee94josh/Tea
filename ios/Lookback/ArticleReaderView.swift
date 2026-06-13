@@ -33,13 +33,6 @@ struct ArticleReaderView: View {
                         .foregroundStyle(Typeface.ink)
                         .lineSpacing(3)
 
-                    if !article.dek.isEmpty {
-                        Text(article.dek)
-                            .font(.system(.body, design: .serif))
-                            .foregroundStyle(Typeface.ink.opacity(0.6))
-                            .lineSpacing(3)
-                    }
-
                     if let dateline = article.dateline {
                         Text("From your photos · \(dateline)")
                             .font(.caption2)
@@ -52,17 +45,12 @@ struct ArticleReaderView: View {
                         .frame(width: 48, height: 2)
                         .padding(.vertical, 4)
 
-                    ForEach(Array(article.bodyParagraphs.enumerated()), id: \.offset) { index, paragraph in
-                        if isBullet(paragraph) {
-                            bulletRow(paragraph)
-                        } else if index == 0 {
-                            leadParagraph(paragraph)
-                        } else {
-                            Text(paragraph)
-                                .font(.system(size: 17, design: .serif))
-                                .foregroundStyle(Typeface.ink)
-                                .lineSpacing(6)
-                        }
+                    ForEach(Array(article.bodyParagraphs.enumerated()), id: \.offset) { _, paragraph in
+                        Text(markdown(paragraph))
+                            .font(.system(size: 17, design: .serif))
+                            .foregroundStyle(Typeface.ink)
+                            .lineSpacing(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     Text("◼︎")
@@ -85,52 +73,13 @@ struct ArticleReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// First paragraph opens with a small-caps lead-in — a newspaper signature
-    /// without resorting to a (fragile) drop cap.
-    private func leadParagraph(_ paragraph: String) -> some View {
-        let words = paragraph.split(separator: " ", omittingEmptySubsequences: true)
-        let leadCount = min(4, words.count)
-        let lead = words.prefix(leadCount).joined(separator: " ").uppercased()
-        let rest = words.dropFirst(leadCount).joined(separator: " ")
-        // iOS 26 deprecates Text + Text; styled segments via interpolation.
-        let leadText = Text(lead)
-            .font(.system(size: 15, weight: .semibold, design: .serif))
-            .kerning(1.2)
-        let restText = Text(rest.isEmpty ? "" : " " + rest)
-            .font(.system(size: 17, design: .serif))
-        return Text("\(leadText)\(restText)")
-            .foregroundStyle(Typeface.ink)
-            .lineSpacing(6)
-    }
-
-    private func isBullet(_ s: String) -> Bool {
-        let t = s.trimmingCharacters(in: .whitespaces)
-        return t.hasPrefix("•") || t.hasPrefix("- ")
-    }
-
-    /// A scannable bullet: a hanging ink dot, then the fact. The model marks the
-    /// lead-in with **bold** Markdown; we render it bold and drop the asterisks.
-    private func bulletRow(_ paragraph: String) -> some View {
-        var text = paragraph.trimmingCharacters(in: .whitespaces)
-        for prefix in ["•", "-"] where text.hasPrefix(prefix) {
-            text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
-        }
+    /// Body paragraphs are short and front-loaded ("bullet-point in spirit"). We
+    /// render inline Markdown so an optional **bold lead-in** comes through and
+    /// the asterisks drop away; if parsing fails, the raw text still shows.
+    private func markdown(_ s: String) -> AttributedString {
         let opts = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        let styled = (try? AttributedString(markdown: text, options: opts))
-            ?? AttributedString(text)
-        return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Circle()
-                .fill(Typeface.ink)
-                .frame(width: 5, height: 5)
-                .offset(y: -3)
-            Text(styled)
-                .font(.system(size: 17, design: .serif))
-                .foregroundStyle(Typeface.ink)
-                .lineSpacing(5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, 2)
+        return (try? AttributedString(markdown: s, options: opts)) ?? AttributedString(s)
     }
 }
 
