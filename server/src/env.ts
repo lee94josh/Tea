@@ -71,9 +71,9 @@ export const env = {
     model: opt('ANTHROPIC_MODEL', 'claude-opus-4-8'),
     // Topic worthiness judging: cheap classification against a rubric.
     judgeModel: opt('ANTHROPIC_JUDGE_MODEL', 'claude-haiku-4-5'),
-    // Article writing: Opus for the sharpest, least-formulaic prose;
-    // web_search grounds it.
-    writerModel: opt('ANTHROPIC_WRITER_MODEL', 'claude-opus-4-8'),
+    // Article writing: Sonnet — strong plain-factual prose at a fraction of
+    // Opus cost; web_search grounds it.
+    writerModel: opt('ANTHROPIC_WRITER_MODEL', 'claude-sonnet-4-6'),
   },
 
   articles: {
