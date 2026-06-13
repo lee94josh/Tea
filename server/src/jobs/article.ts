@@ -26,6 +26,9 @@ import {
 import { enqueue, JOBS } from '../queue';
 import { env } from '../env';
 
+/** A single photo cluster shouldn't become five articles. */
+const MAX_ARTICLES_PER_MOMENT = 2;
+
 export interface ArticleJob {
   topicId: string;
 }
@@ -262,12 +265,18 @@ export async function runArticleCoordinator(): Promise<void> {
       }
     }
 
-    // Phase 3: write the strongest remaining topic.
+    // Phase 3: write the strongest remaining topic — but at most 2 per moment
+    // (one photo cluster shouldn't spawn five articles), so a moment that
+    // already has 2 written topics is skipped.
     const next = (
       await query<{ id: string }>(
-        `select id from discover_topics
-           where name <> '__none__' and article is null and not shelved
-           order by score desc nulls last, created_at asc limit 1`,
+        `select t.id from discover_topics t
+           where t.name <> '__none__' and t.article is null and not t.shelved
+             and (
+               select count(*) from discover_topics w
+                where w.moment_id = t.moment_id and w.article is not null
+             ) < ${MAX_ARTICLES_PER_MOMENT}
+           order by t.score desc nulls last, t.created_at asc limit 1`,
       )
     ).rows[0];
     if (!next) return; // all caught up — stop the loop

@@ -30,12 +30,13 @@ struct ArticleReaderView: View {
 
                     Text(article.headline)
                         .font(.system(size: 30, weight: .bold, design: .serif))
+                        .foregroundStyle(Typeface.ink)
                         .lineSpacing(3)
 
                     if !article.dek.isEmpty {
                         Text(article.dek)
                             .font(.system(.body, design: .serif))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Typeface.ink.opacity(0.6))
                             .lineSpacing(3)
                     }
 
@@ -52,11 +53,14 @@ struct ArticleReaderView: View {
                         .padding(.vertical, 4)
 
                     ForEach(Array(article.bodyParagraphs.enumerated()), id: \.offset) { index, paragraph in
-                        if index == 0 {
+                        if isBullet(paragraph) {
+                            bulletRow(paragraph)
+                        } else if index == 0 {
                             leadParagraph(paragraph)
                         } else {
                             Text(paragraph)
                                 .font(.system(size: 17, design: .serif))
+                                .foregroundStyle(Typeface.ink)
                                 .lineSpacing(6)
                         }
                     }
@@ -95,7 +99,38 @@ struct ArticleReaderView: View {
         let restText = Text(rest.isEmpty ? "" : " " + rest)
             .font(.system(size: 17, design: .serif))
         return Text("\(leadText)\(restText)")
+            .foregroundStyle(Typeface.ink)
             .lineSpacing(6)
+    }
+
+    private func isBullet(_ s: String) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespaces)
+        return t.hasPrefix("•") || t.hasPrefix("- ")
+    }
+
+    /// A scannable bullet: a hanging ink dot, then the fact. The model marks the
+    /// lead-in with **bold** Markdown; we render it bold and drop the asterisks.
+    private func bulletRow(_ paragraph: String) -> some View {
+        var text = paragraph.trimmingCharacters(in: .whitespaces)
+        for prefix in ["•", "-"] where text.hasPrefix(prefix) {
+            text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        }
+        let opts = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        let styled = (try? AttributedString(markdown: text, options: opts))
+            ?? AttributedString(text)
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Circle()
+                .fill(Typeface.ink)
+                .frame(width: 5, height: 5)
+                .offset(y: -3)
+            Text(styled)
+                .font(.system(size: 17, design: .serif))
+                .foregroundStyle(Typeface.ink)
+                .lineSpacing(5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 2)
     }
 }
 
