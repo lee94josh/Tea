@@ -35,14 +35,6 @@ struct CanvasHomeView: View {
             .overlay { stateOverlay }
         }
         .navigationDestination(for: Article.self) { ArticleReaderView(article: $0) }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("LOOKBACK")
-                    .font(.system(size: 17, weight: .black, design: .serif))
-                    .kerning(2)
-                    .foregroundStyle(Typeface.ink)
-            }
-        }
         .toolbarBackground(Typeface.paper, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .refreshable { await load() }
@@ -111,9 +103,9 @@ struct CanvasHomeView: View {
     /// (the top-center start); the rest drop into whichever column is shortest.
     static func layout(_ articles: [Article], screenW: CGFloat) -> [Placement] {
         guard !articles.isEmpty, screenW > 0 else { return [] }
-        let canvasW = screenW * 2.1
+        let canvasW = screenW * 2.4
         let cols = [0.18, 0.5, 0.82].map { canvasW * CGFloat($0) }
-        let topPad: CGFloat = 160
+        let topPad: CGFloat = 120 // the masthead is gone — content owns the top
         var colY: [CGFloat] = [topPad + 130, topPad, topPad + 230]
 
         let ranked = articles.sorted { ($0.score ?? -1) > ($1.score ?? -1) }
@@ -121,7 +113,7 @@ struct CanvasHomeView: View {
         for (i, a) in ranked.enumerated() {
             let seed = stableSeed(a.id)
             // Three card sizes, so the canvas reads hand-set, not gridded.
-            let cardW = ([152, 176, 198] as [CGFloat])[seed % 3]
+            let cardW = ([190, 220, 248] as [CGFloat])[seed % 3]
             let h = estimatedHeight(a, seed: seed)
             let col = i == 0 ? 1 : (colY.indices.min { colY[$0] < colY[$1] } ?? 0)
             let jitterX = CGFloat((seed % 25) - 12) // small — never enough to touch a neighbor
@@ -129,16 +121,15 @@ struct CanvasHomeView: View {
             let rot = (Double(seed % 17) - 8) / 10.0 // ±0.8°
             out.append(Placement(id: a.id, article: a, center: center,
                                  size: CGSize(width: cardW, height: h), seed: seed, rotation: rot))
-            // The 2:1 rhythm — every entry is followed by at least half its own
-            // height in empty paper, so a third of each column is air.
-            colY[col] += h + max(96, h * 0.5) + CGFloat(seed % 33)
+            // Roughly 3:1 content-to-air — generous but not empty.
+            colY[col] += h + max(72, h * 0.375) + CGFloat(seed % 24)
         }
         return out
     }
 
     static func canvasSize(_ placements: [Placement], screenW: CGFloat) -> CGSize {
         let bottom = placements.map { $0.center.y + $0.size.height / 2 }.max() ?? screenW
-        return CGSize(width: screenW * 2.1, height: bottom + 220)
+        return CGSize(width: screenW * 2.4, height: bottom + 200)
     }
 
     /// What the card will actually occupy, computed from its content (line
@@ -146,11 +137,11 @@ struct CanvasHomeView: View {
     static func estimatedHeight(_ a: Article, seed: Int) -> CGFloat {
         let lines = MagazineHeadline.split(indexTitle(a.headline).uppercased())
         let size = MagazineHeadline.size(for: lines)
-        var h: CGFloat = 21 + 6 + 14 + 6 // score badge + kind label + spacing
+        var h: CGFloat = 25 + 6 + 16 + 6 // score badge + kind label + spacing
         h += CGFloat(lines.count) * size * 1.18
         if a.photos.first != nil {
-            let stamp = ([64, 78, 92] as [CGFloat])[seed % 3]
-            h += 12 + (seed % 3 == 0 ? stamp + 24 : stamp) // cutouts float a little taller
+            let stamp = ([80, 98, 115] as [CGFloat])[seed % 3]
+            h += 12 + (seed % 3 == 0 ? stamp + 26 : stamp) // cutouts float a little taller
         }
         return h
     }
@@ -216,7 +207,7 @@ private struct ArticleCard: View {
         VStack(alignment: centered ? .center : .leading, spacing: 6) {
             ScoreBadge(value: article.score ?? (40 + seed % 55))
             Text(kindLabel(article.kind))
-                .font(Typeface.serif(11))
+                .font(Typeface.serif(13))
                 .foregroundStyle(Typeface.ink.opacity(0.65))
             MagazineHeadline(text: CanvasHomeView.indexTitle(article.headline),
                              seed: seed, centered: centered)
@@ -229,9 +220,9 @@ private struct ArticleCard: View {
     /// category pill (the tiny kind label above the title already says it).
     @ViewBuilder private func anchor(_ wantsCutout: Bool) -> some View {
         if let url = API.absoluteURL(article.photos.first?.visionUrl ?? article.photos.first?.thumbUrl) {
-            let stampH = ([64, 78, 92] as [CGFloat])[seed % 3]
+            let stampH = ([80, 98, 115] as [CGFloat])[seed % 3]
             AnchorImage(url: url, wantsCutout: wantsCutout,
-                        width: min(150, width * 0.82), height: stampH,
+                        width: min(190, width * 0.82), height: stampH,
                         pill: seed % 2 == 1 ? kindLabel(article.kind).uppercased() : nil)
                 .frame(maxWidth: .infinity,
                        alignment: centered ? .center : (seed % 4 < 2 ? .leading : .trailing))
@@ -246,12 +237,12 @@ private struct ScoreBadge: View {
     var body: some View {
         let clamped = min(99, max(0, value))
         let digits = Array(String(format: "%02d", clamped))
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             ForEach(Array(digits.enumerated()), id: \.offset) { _, d in
                 Text(String(d))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(Typeface.paper)
-                    .frame(width: 21, height: 21)
+                    .frame(width: 25, height: 25)
                     .background(Circle().fill(Typeface.ink))
             }
         }
@@ -286,9 +277,9 @@ private struct MagazineHeadline: View {
 
     static func size(for lines: [String]) -> CGFloat {
         let longest = lines.map(\.count).max() ?? 0
-        if longest > 12 { return 15 }
-        if longest > 8 { return 18 }
-        return 21
+        if longest > 12 { return 19 }
+        if longest > 8 { return 23 }
+        return 26
     }
 
     /// Greedy balance into at most three lines, ~13 chars each.
@@ -364,11 +355,11 @@ private struct BubblePill: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(.system(size: 9, weight: .semibold))
+            .font(.system(size: 11, weight: .semibold))
             .kerning(0.5)
             .foregroundStyle(Typeface.ink)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
             .background(Capsule().fill(Typeface.paper))
             .overlay(Capsule().strokeBorder(Typeface.ink.opacity(0.85), lineWidth: 1))
     }
