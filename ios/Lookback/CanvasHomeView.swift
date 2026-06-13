@@ -21,7 +21,7 @@ struct CanvasHomeView: View {
                     ForEach(placements) { p in
                         NavigationLink(value: p.article) {
                             ArticleCard(article: p.article, seed: p.seed,
-                                        width: p.size.width, height: p.size.height)
+                                        width: p.size.width)
                         }
                         .buttonStyle(CardPress())
                         .rotationEffect(.degrees(p.rotation))
@@ -104,37 +104,64 @@ struct CanvasHomeView: View {
         let rotation: Double
     }
 
-    /// Masonry over three columns on a plane ~1.9× the screen wide. The
-    /// strongest article seeds the center column (top-center start); the rest
-    /// drop into whichever column is shortest, so the best work clusters up top.
+    /// Masonry over three columns on a plane ~2.1× the screen wide. Entries are
+    /// small and the space between them is large — the reference index works
+    /// because the whitespace outweighs the content. Columns start staggered so
+    /// nothing reads as a row; the strongest article seeds the center column
+    /// (the top-center start); the rest drop into whichever column is shortest.
     static func layout(_ articles: [Article], screenW: CGFloat) -> [Placement] {
         guard !articles.isEmpty, screenW > 0 else { return [] }
-        let canvasW = screenW * 1.9
-        let cardW = min(248, screenW * 0.64)
-        let cols = [0.17, 0.5, 0.83].map { canvasW * CGFloat($0) }
-        let topPad: CGFloat = 110
-        let gap: CGFloat = 28
-        var colY = [CGFloat](repeating: topPad, count: 3)
+        let canvasW = screenW * 2.1
+        let cardW: CGFloat = 184
+        let cols = [0.18, 0.5, 0.82].map { canvasW * CGFloat($0) }
+        let topPad: CGFloat = 150
+        var colY: [CGFloat] = [topPad + 110, topPad, topPad + 190]
 
         let ranked = articles.sorted { ($0.score ?? -1) > ($1.score ?? -1) }
         var out: [Placement] = []
         for (i, a) in ranked.enumerated() {
             let seed = stableSeed(a.id)
-            let h = ([214, 244, 272] as [CGFloat])[seed % 3]
+            let h = estimatedHeight(a, seed: seed)
             let col = i == 0 ? 1 : (colY.indices.min { colY[$0] < colY[$1] } ?? 0)
-            let jitterX = CGFloat((seed % 29) - 14)
+            let jitterX = CGFloat((seed % 41) - 20)
             let center = CGPoint(x: cols[col] + jitterX, y: colY[col] + h / 2)
-            let rot = (Double(seed % 26) - 13) / 10.0 // ±1.3°
+            let rot = (Double(seed % 17) - 8) / 10.0 // ±0.8°
             out.append(Placement(id: a.id, article: a, center: center,
                                  size: CGSize(width: cardW, height: h), seed: seed, rotation: rot))
-            colY[col] += h + gap
+            colY[col] += h + 84 + CGFloat(seed % 56) // 84–139pt of air between entries
         }
         return out
     }
 
     static func canvasSize(_ placements: [Placement], screenW: CGFloat) -> CGSize {
         let bottom = placements.map { $0.center.y + $0.size.height / 2 }.max() ?? screenW
-        return CGSize(width: screenW * 1.9, height: bottom + 140)
+        return CGSize(width: screenW * 2.1, height: bottom + 220)
+    }
+
+    /// What the card will actually occupy, computed from its content (line
+    /// count, image treatment) so entries never collide — fixed guesses did.
+    static func estimatedHeight(_ a: Article, seed: Int) -> CGFloat {
+        let lines = MagazineHeadline.split(indexTitle(a.headline).uppercased())
+        let size = MagazineHeadline.size(for: lines)
+        var h: CGFloat = 21 + 6 + 14 + 6 // score badge + kind label + spacing
+        h += CGFloat(lines.count) * size * 1.18
+        if a.photos.first != nil {
+            h += 12 + (seed % 3 == 0 ? 102 : 78) // cutout floats taller than the framed stamp
+        }
+        return h
+    }
+
+    /// An index entry is a title, not a sentence. Cut at the first clause break
+    /// ("Wimbledon Centre Court, and the year-round…" → "WIMBLEDON CENTRE
+    /// COURT"); the full headline still opens the reader.
+    static func indexTitle(_ headline: String) -> String {
+        let breaks: Set<Character> = [",", ":", ";", "—", "–"]
+        if let idx = headline.firstIndex(where: { breaks.contains($0) }) {
+            let clause = headline[..<idx].trimmingCharacters(in: .whitespaces)
+            if clause.split(separator: " ").count >= 2 { return clause }
+        }
+        let words = headline.split(separator: " ")
+        return words.count <= 7 ? headline : words.prefix(7).joined(separator: " ")
     }
 }
 
@@ -161,12 +188,11 @@ private struct ArticleCard: View {
     let article: Article
     let seed: Int
     let width: CGFloat
-    let height: CGFloat
 
     var body: some View {
         let imageOnTop = seed % 2 == 0
         let wantsCutout = seed % 3 == 0
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 12) {
             if imageOnTop {
                 anchor(wantsCutout)
                 textBlock
@@ -175,23 +201,29 @@ private struct ArticleCard: View {
                 anchor(wantsCutout)
             }
         }
-        .frame(width: width, height: height, alignment: .topLeading)
+        .frame(width: width, alignment: .topLeading)
     }
 
     private var textBlock: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             ScoreBadge(value: article.score ?? (40 + seed % 55))
             Text(kindLabel(article.kind))
-                .font(Typeface.serif(12))
-                .foregroundStyle(Typeface.ink.opacity(0.7))
-            MagazineHeadline(text: article.headline, seed: seed)
+                .font(Typeface.serif(11))
+                .foregroundStyle(Typeface.ink.opacity(0.65))
+            MagazineHeadline(text: CanvasHomeView.indexTitle(article.headline), seed: seed)
         }
     }
 
+    /// Stamp-sized, like the reference — the photo is a marginal note beside
+    /// the title, not a billboard. It drifts to either edge of the card, and
+    /// only every other one carries the category pill (the tiny kind label
+    /// above the title already says it).
     @ViewBuilder private func anchor(_ wantsCutout: Bool) -> some View {
         if let url = API.absoluteURL(article.photos.first?.visionUrl ?? article.photos.first?.thumbUrl) {
-            AnchorImage(url: url, wantsCutout: wantsCutout, height: 96,
-                        pill: (article.kind ?? "").isEmpty ? nil : article.kind!.uppercased())
+            AnchorImage(url: url, wantsCutout: wantsCutout,
+                        width: min(150, width * 0.82), height: 78,
+                        pill: seed % 2 == 1 ? kindLabel(article.kind).uppercased() : nil)
+                .frame(maxWidth: .infinity, alignment: seed % 4 < 2 ? .leading : .trailing)
         }
     }
 }
@@ -233,16 +265,18 @@ private struct MagazineHeadline: View {
                 Text(line)
                     .font((isLast ? accent : base).font(size))
                     .foregroundStyle(Typeface.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6) // a long line shrinks, never wraps —
+                                             // wrapping would break the height estimate
             }
         }
     }
 
-    private static func size(for lines: [String]) -> CGFloat {
+    static func size(for lines: [String]) -> CGFloat {
         let longest = lines.map(\.count).max() ?? 0
-        if longest > 13 { return 18 }
-        if longest > 9 { return 21 }
-        return 24
+        if longest > 12 { return 15 }
+        if longest > 8 { return 18 }
+        return 21
     }
 
     /// Greedy balance into at most three lines, ~13 chars each.
@@ -274,6 +308,7 @@ private struct MagazineHeadline: View {
 private struct AnchorImage: View {
     let url: URL
     let wantsCutout: Bool
+    let width: CGFloat
     let height: CGFloat
     let pill: String?
 
@@ -296,11 +331,11 @@ private struct AnchorImage: View {
                         Rectangle().fill(Typeface.ink.opacity(0.06))
                     }
                 }
-                .frame(height: height)
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 2))
             }
-            if let pill { BubblePill(text: pill).padding(6) }
+            // Half-on the corner, like the reference's tags.
+            if let pill { BubblePill(text: pill).offset(x: -9, y: -9) }
         }
         .task {
             guard wantsCutout, !tried else { return }
