@@ -94,18 +94,21 @@ struct CanvasHomeView: View {
     }
 
     /// Best stories first, and every photo used at most once across the whole
-    /// feed: each story takes its first not-yet-used photo as its key image.
+    /// feed. Assignment runs most-constrained-first — a story with one photo
+    /// picks before a story with five — so nobody goes photoless just because
+    /// a richer story upstream grabbed their only shot.
     static func makeEntries(_ articles: [Article]) -> [Entry] {
         let ranked = articles.sorted { ($0.score ?? -1) > ($1.score ?? -1) }
+        var assigned: [String: PhotoRef] = [:]
         var used = Set<String>()
-        return ranked.map { a in
-            var pick: PhotoRef?
-            for p in a.photos where !used.contains(p.id) {
-                pick = p
+        for a in ranked.sorted(by: { $0.photos.count < $1.photos.count }) {
+            if let p = a.photos.first(where: { !used.contains($0.id) }) {
+                assigned[a.id] = p
                 used.insert(p.id)
-                break
             }
-            return Entry(article: a, seed: stableSeed(a.id), keyPhoto: pick)
+        }
+        return ranked.map {
+            Entry(article: $0, seed: stableSeed($0.id), keyPhoto: assigned[$0.id])
         }
     }
 

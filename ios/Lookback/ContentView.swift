@@ -44,6 +44,10 @@ struct ContentView: View {
             }
         }
         .tint(.primary)
+        // The paper is an editorial palette, not a theme: warm tan, ink text,
+        // in every system appearance. Without this, dark mode renders system-
+        // default text white on the (always-light) paper — illegible.
+        .preferredColorScheme(.light)
         .sheet(isPresented: $showSettings) {
             SettingsView(library: library, sync: sync)
         }
