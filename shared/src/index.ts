@@ -334,6 +334,10 @@ export interface Article {
   /** When the article was written (ISO) — feed is ordered by this. */
   generatedAt: string;
   photos: PhotoRef[];
+  /** The judge's editorial tier for this topic (1 best … 5), if scored. */
+  predictedTier: number | null;
+  /** The reader's own 1–5 verdict, once they've rated it. */
+  userRating: number | null;
 }
 
 /** `POST /discover/:id/dive` — cached search-grounded deep dive. */

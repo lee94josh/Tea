@@ -71,8 +71,10 @@ export async function backfillTopics(limit: number): Promise<void> {
   for (const row of missing.rows) {
     try {
       const newIds = await extractAndStoreTopics(row.id);
-      for (const id of newIds) {
-        await enqueue(JOBS.articleGenerate, { topicId: id });
+      if (newIds.length > 0) {
+        // Through the coordinator, never per-topic fan-out: new topics must be
+        // scored by the judge before anything gets written.
+        await enqueue(JOBS.articleCoordinator, {}, { singletonKey: 'article-coord' });
       }
     } catch (err) {
       console.warn(`[discover] backfill failed for ${row.id} (non-fatal):`, err);
@@ -86,11 +88,11 @@ export async function backfillArticles(limit: number): Promise<void> {
   if (!env.gemini.apiKey) return;
   const missing = await query<{ id: string }>(
     `select id from discover_topics
-      where name <> '__none__' and article is null
+      where name <> '__none__' and article is null and not shelved
       order by created_at desc limit $1`,
     [limit],
   );
-  for (const row of missing.rows) {
-    await enqueue(JOBS.articleGenerate, { topicId: row.id }, { singletonKey: `article-${row.id}` });
+  if (missing.rows.length > 0) {
+    await enqueue(JOBS.articleCoordinator, {}, { singletonKey: 'article-coord' });
   }
 }

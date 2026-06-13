@@ -12,6 +12,15 @@ struct ContentView: View {
     @State private var showSettings = false
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Headless sync, matching the per-run cap used everywhere else. Skips
+    /// silently when unconfigured; SyncRunner already dedupes via the ledger.
+    private func kickQuietSync() {
+        guard !token.isEmpty, library.isAuthorized else { return }
+        Task.detached(priority: .utility) {
+            _ = await SyncRunner.run(limit: 25)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -44,19 +53,19 @@ struct ContentView: View {
                 sync.startObserving()
                 sync.refreshPendingCount()
             }
+            // Cold launch counts as "opening the app": kick a quiet sync so
+            // photos flow without ever visiting Settings.
+            kickQuietSync()
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background:
                 BackgroundSync.scheduleAll()
             case .active:
-                // Quiet top-up: a few photos, no UI. New articles arrive on
-                // the next pull-to-refresh once research finishes.
-                if !token.isEmpty && library.isAuthorized {
-                    Task.detached(priority: .utility) {
-                        _ = await SyncRunner.run(limit: 8)
-                    }
-                }
+                // Every return to the foreground tops up quietly, no UI. New
+                // articles arrive on the next pull-to-refresh once research
+                // finishes.
+                kickQuietSync()
             default:
                 break
             }

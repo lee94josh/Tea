@@ -46,6 +46,27 @@ never fragments.
 | Eames chair shot close in a design store | ✅ the design / the Eameses | design-curious subject, specific |
 | Mural photographed straight-on | ✅ if attributable to an artist; ❌ generic graffiti | specificity decides |
 
+## Worthiness score (the choosier-topics layer)
+
+Extraction proposes candidates; a separate judge (Claude Haiku, see
+`server/src/integrations/anthropic.ts`) scores each 0–100 before anything is
+written. Four dimensions, 25 points each: **attention** (how hard the photos
+voted), **specificity** (named subject vs. category), **depth** (a real story
+to research), **teachability** (will the reader actually learn something).
+
+| Score | Tier | Examples | Treatment |
+| --- | --- | --- | --- |
+| 80–100 | 1 — front page | the pyebaek and its ducks · Honeysuckle · Baby Keem at Brooklyn Paramount · Arthur Jafa | written |
+| 65–79 | 2 | the Paramount building itself · a named ice-cream shop · the artist behind a mural | written |
+| 50–64 | 3 | a neighborhood's history · a dish style · an Eames chair | written (threshold = `ARTICLE_SCORE_MIN`, default 50) |
+| 35–49 | 4 | borderline ambient subjects | shelved |
+| 0–34 | 5 — skip | NASA mug · MacBook · sourdough toast · skylines | shelved |
+
+The reader rates every article 1–5 in the app (1 = best); ratings feed back
+into the judge as liked/disliked exemplars, so the boundary converges on THIS
+reader's front page. Scores + per-dimension breakdowns are stored on
+`discover_topics.score_reasons` for auditing bad calls.
+
 ## Scorecard
 
 The extraction prompt embeds this canon; `scripts` runs scenario batteries

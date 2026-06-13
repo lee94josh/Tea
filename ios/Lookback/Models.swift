@@ -23,6 +23,10 @@ struct Article: Codable, Identifiable, Hashable {
     let momentDate: String?
     let generatedAt: String?
     let photos: [PhotoRef]
+    /// The judge's editorial tier (1 best … 5), shown so the reader can correct it.
+    let predictedTier: Int?
+    /// The reader's own 1–5 verdict, once rated.
+    let userRating: Int?
 
     /// "June 6, 2026" from the moment's ISO date, for the dateline.
     var dateline: String? {

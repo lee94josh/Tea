@@ -36,4 +36,22 @@ enum API {
 
     static func articles() async throws -> [Article] { try await get("/articles") }
     static func pipeline() async throws -> PipelineStatus { try await get("/pipeline") }
+
+    /// Rate an article 1–5 (1 = best). Fire-and-forget friendly; throws on failure.
+    static func rate(articleId: String, rating: Int) async throws {
+        guard let url = URL(string: serverURL + "/articles/\(articleId)/rating") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["rating": rating])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let text = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "Lookback", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "Server error: \(text.prefix(120))"])
+        }
+    }
 }

@@ -51,8 +51,10 @@ export const env = {
 
   gemini: {
     apiKey: opt('GEMINI_API_KEY'),
-    // Rolling alias — survives Google's preview-model retirements.
-    visionModel: opt('GEMINI_VISION_MODEL', 'gemini-pro-latest'),
+    // Rolling alias — survives Google's preview-model retirements. Flash tier:
+    // benchmarks put it within a few points of pro on image understanding
+    // (MMMU-Pro parity) at a fraction of the quota pressure.
+    visionModel: opt('GEMINI_VISION_MODEL', 'gemini-flash-latest'),
     // Interactive conversation: flash for instant-feeling streamed replies.
     chatModel: opt('GEMINI_CHAT_MODEL', 'gemini-3.5-flash'),
     embedModel: opt('GEMINI_EMBED_MODEL', 'gemini-embedding-001'),
@@ -67,6 +69,20 @@ export const env = {
   anthropic: {
     apiKey: opt('ANTHROPIC_API_KEY'),
     model: opt('ANTHROPIC_MODEL', 'claude-opus-4-8'),
+    // Topic worthiness judging: cheap classification against a rubric.
+    judgeModel: opt('ANTHROPIC_JUDGE_MODEL', 'claude-haiku-4-5'),
+    // Article writing: best plain-factual prose; web_search grounds it.
+    writerModel: opt('ANTHROPIC_WRITER_MODEL', 'claude-sonnet-4-6'),
+  },
+
+  articles: {
+    /** Topics scoring below this are shelved, not written (0–100). */
+    scoreMin: num('ARTICLE_SCORE_MIN', 50),
+    /** One-time backlog cull target: total articles to keep after scoring. */
+    cullTarget: num('ARTICLE_CULL_TARGET', 35),
+    /** Articles are write-once: refuse to print unscored topics when the
+     *  judge isn't configured (ARTICLE_REQUIRE_JUDGE=0 restores old behavior). */
+    requireJudge: num('ARTICLE_REQUIRE_JUDGE', 1) !== 0,
   },
 
   googlePlaces: {

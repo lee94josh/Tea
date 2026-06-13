@@ -1,8 +1,11 @@
 # One-shot Railway deploy, driven entirely by CI so no local Railway access is
 # needed. Requires three repository secrets (Settings → Secrets → Actions):
 #   RAILWAY_TOKEN   — Railway account/workspace token (delete after deploying)
-#   GEMINI_API_KEY  — runs vision + seeds + conversation
+#   GEMINI_API_KEY  — runs vision + research (search-grounded)
 #   APP_TOKEN       — the app's login token (you choose it)
+# Optional:
+#   ANTHROPIC_API_KEY — topic judging (Haiku) + article writing (Sonnet);
+#                       without it the server falls back to Gemini for both
 #
 # Control plane goes through Railway's GraphQL API directly (the CLI rejects
 # workspace-scoped tokens); code upload uses `railway up` with a project token
@@ -37,6 +40,7 @@ jobs:
           [ -n "$RAILWAY_API_TOKEN" ] || { echo "::error::RAILWAY_TOKEN secret missing"; exit 1; }
           [ -n "${{ secrets.GEMINI_API_KEY }}" ] || { echo "::error::GEMINI_API_KEY secret missing"; exit 1; }
           [ -n "${{ secrets.APP_TOKEN }}" ] || { echo "::error::APP_TOKEN secret missing"; exit 1; }
+          [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ] || echo "::warning::ANTHROPIC_API_KEY secret missing — judging/writing fall back to Gemini"
           npm i -g @railway/cli web-push
           railway --version
 
@@ -119,12 +123,14 @@ jobs:
           APPVARS=$(jq -n \
             --arg t  "${{ secrets.APP_TOKEN }}" \
             --arg g  "${{ secrets.GEMINI_API_KEY }}" \
+            --arg a  "${{ secrets.ANTHROPIC_API_KEY }}" \
             --arg db "$DBURL" \
             --arg vp "$VPUB" --arg vk "$VPRIV" \
             '{APP_TOKEN:$t, GEMINI_API_KEY:$g, DATABASE_URL:$db,
               STORAGE_DRIVER:"disk", STORAGE_DISK_PATH:"/data",
               VAPID_PUBLIC_KEY:$vp, VAPID_PRIVATE_KEY:$vk,
-              VAPID_SUBJECT:"mailto:lookback@users.noreply.github.com"}')
+              VAPID_SUBJECT:"mailto:lookback@users.noreply.github.com"}
+             + (if $a != "" then {ANTHROPIC_API_KEY:$a} else {} end)')
           R=$(gql 'mutation($i: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $i) }' \
                   "$(jq -n --arg p "$PID" --arg e "$EID" --arg s "$SID" --argjson kv "$APPVARS" '{i:{projectId:$p, environmentId:$e, serviceId:$s, variables:$kv}}')")
           echo "$R" | jq -e '.data.variableCollectionUpsert' >/dev/null || { echo "::error::variableCollectionUpsert failed:"; echo "$R" | jq .; exit 1; }

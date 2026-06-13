@@ -66,6 +66,9 @@ struct ArticleReaderView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 8)
                         .foregroundStyle(.secondary)
+
+                    TierRatingView(article: article)
+                        .padding(.top, 16)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
@@ -91,5 +94,67 @@ struct ArticleReaderView: View {
             .font(.system(size: 17, design: .serif))
         return Text("\(leadText)\(restText)")
             .lineSpacing(6)
+    }
+}
+
+/// The calibration loop, in one row: Lookback states its own tier call
+/// (1 = front page, 5 = shouldn't exist), the reader corrects it. Every
+/// correction teaches the topic judge what this paper's front page is.
+private struct TierRatingView: View {
+    let article: Article
+    @State private var rating: Int?
+    @State private var saveFailed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider()
+            if let tier = article.predictedTier {
+                Text("Lookback's call: Tier \(tier)\(tier == 1 ? " — front page" : "")")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Text(rating == nil ? "Your verdict — was this worth printing?" : "Your verdict")
+                .font(.footnote.weight(.semibold))
+
+            HStack(spacing: 8) {
+                ForEach(1...5, id: \.self) { tier in
+                    Button {
+                        setRating(tier)
+                    } label: {
+                        Text("\(tier)")
+                            .font(.system(.subheadline, design: .serif).weight(.semibold))
+                            .frame(width: 40, height: 40)
+                            .background(
+                                Circle().fill(current == tier ? Color.primary : Color.clear)
+                            )
+                            .overlay(Circle().strokeBorder(.quaternary, lineWidth: 1))
+                            .foregroundStyle(current == tier ? Color(.systemBackground) : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+            Text("1 = best, 5 = skip it. Your ratings tune what gets written next.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            if saveFailed {
+                Text("Couldn't save — try again.")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+        }
+        .onAppear { rating = article.userRating }
+    }
+
+    private var current: Int? { rating ?? article.userRating }
+
+    private func setRating(_ tier: Int) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        rating = tier
+        saveFailed = false
+        Task {
+            do { try await API.rate(articleId: article.id, rating: tier) }
+            catch { saveFailed = true }
+        }
     }
 }

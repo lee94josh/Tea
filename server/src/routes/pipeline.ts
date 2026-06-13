@@ -60,7 +60,7 @@ export function pipelineRoutes(app: FastifyInstance): void {
     const article = (
       await query<{ written: string; pending: string }>(`
         select count(*) filter (where article is not null)::text written,
-               count(*) filter (where article is null)::text pending
+               count(*) filter (where article is null and not shelved)::text pending
           from discover_topics where name <> '__none__'
       `)
     ).rows[0]!;
