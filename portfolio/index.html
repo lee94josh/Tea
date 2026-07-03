@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haley Kim — Graphic Designer</title>
+<meta name="description" content="Portfolio of Haley Kim, graphic designer.">
+<link rel="preload" href="fonts/anton-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<h1 class="visually-hidden">Haley Kim — Graphic Designer</h1>
+
+<!-- ============ HERO (scroll-scrubbed pour animation) ============ -->
+<div class="hero-track" id="hero-track">
+  <div class="hero-sticky">
+    <svg id="scene" viewBox="0 0 1671 1063" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <!-- clips everything ABOVE the rising flood (used for the stream) -->
+        <clipPath id="above-flood">
+          <rect id="above-flood-rect" x="-100" y="-200" width="1900" height="1290"/>
+        </clipPath>
+        <!-- clips to the flood itself (used for the cream text reveal) -->
+        <clipPath id="in-flood">
+          <rect id="in-flood-rect" x="-100" y="1090" width="1900" height="1400"/>
+        </clipPath>
+        <!-- interior of the cup, for the rising coffee fill -->
+        <clipPath id="cup-inner">
+          <ellipse cx="634" cy="812" rx="166" ry="27"/>
+        </clipPath>
+      </defs>
+
+      <!-- background -->
+      <rect x="-10" y="-10" width="1691" height="1083" fill="#ECE8E4"/>
+      <!-- table -->
+      <rect x="-10" y="888" width="1691" height="185" fill="#7C2B14"/>
+
+      <!-- ======== persimmon ======== -->
+      <ellipse id="persimmon-shadow" cx="1148" cy="968" rx="148" ry="20" fill="#0A0A0A"/>
+      <ellipse id="puddle" cx="1000" cy="952" rx="10" ry="24" fill="#6D2F17" opacity="0"/>
+      <g id="persimmon">
+        <rect x="1012" y="774" width="272" height="192" rx="86" fill="#F5A824"/>
+        <path d="M1064 792 Q1074 758 1116 764 Q1128 742 1148 742 Q1168 742 1180 764 Q1222 758 1232 792 Q1236 806 1218 812 Q1180 822 1148 822 Q1116 822 1078 812 Q1060 806 1064 792 Z" fill="#46B021"/>
+        <ellipse cx="1148" cy="784" rx="38" ry="13" fill="none" stroke="#1F9110" stroke-width="8"/>
+      </g>
+      <g id="persimmon-splash" opacity="0" fill="none" stroke="#C58A7B" stroke-width="14" stroke-linecap="round">
+        <path d="M980 936 q30 -22 66 -6"/>
+        <path d="M1240 928 q40 -16 74 4"/>
+        <path d="M1030 962 q-26 10 -52 0"/>
+      </g>
+
+      <!-- ======== cup ======== -->
+      <ellipse id="cup-shadow" cx="622" cy="1000" rx="208" ry="28" fill="#0A0A0A"/>
+      <circle cx="428" cy="906" r="58" fill="none" stroke="#2740E3" stroke-width="38"/>
+      <g id="cup">
+        <path d="M451 814 C455 932 522 998 634 998 C746 998 813 932 817 814 Z" fill="#3D52E8"/>
+        <ellipse cx="634" cy="812" rx="186" ry="36" fill="#3D52E8" stroke="#1927C9" stroke-width="13"/>
+        <ellipse cx="634" cy="812" rx="160" ry="26" fill="#2E43DC"/>
+        <!-- rising coffee inside the cup -->
+        <g clip-path="url(#cup-inner)">
+          <rect id="cup-coffee" x="460" y="840" width="350" height="60" fill="#62290F"/>
+        </g>
+      </g>
+
+      <!-- overflow stage 1: dome over the rim + drips down the bowl -->
+      <g id="overflow1" opacity="0">
+        <ellipse cx="634" cy="800" rx="196" ry="48" fill="#6D3620"/>
+        <ellipse cx="634" cy="776" rx="122" ry="42" fill="#6D3620"/>
+        <rect x="462" y="810" width="34" height="86" rx="17" fill="#6D3620"/>
+        <rect x="524" y="812" width="30" height="56" rx="15" fill="#6D3620"/>
+        <rect x="700" y="812" width="32" height="70" rx="16" fill="#6D3620"/>
+        <rect x="762" y="808" width="34" height="104" rx="17" fill="#6D3620"/>
+      </g>
+      <!-- overflow stage 2: whole cup engulfed -->
+      <g id="overflow2" opacity="0">
+        <path d="M396 982 C378 862 476 716 634 712 C792 716 890 862 872 982 C874 1002 856 1010 830 1002 C818 1022 792 1024 776 1006 C760 1026 730 1026 716 1006 C700 1028 668 1028 654 1006 C636 1026 606 1024 594 1004 C576 1022 548 1020 538 1000 C520 1014 494 1010 488 992 C466 1002 442 996 438 980 C418 986 398 990 396 982 Z" fill="#6D3620"/>
+      </g>
+
+      <!-- ======== coffee stream (clipped by the rising flood) ======== -->
+      <g clip-path="url(#above-flood)">
+        <path id="stream" d="M764 486 C640 512 606 646 636 800" fill="none" stroke="#6D3620" stroke-width="42" stroke-linecap="round"/>
+      </g>
+      <!-- splash at the impact point / flood surface -->
+      <g id="splash" opacity="0">
+        <g fill="none" stroke="#C58A7B" stroke-width="13" stroke-linecap="round">
+          <path d="M574 800 q22 -26 50 -8"/>
+          <path d="M652 786 q28 -16 54 4"/>
+          <path d="M596 812 q-22 12 -44 2"/>
+        </g>
+        <ellipse cx="646" cy="778" rx="12" ry="9" fill="#C58A7B"/>
+      </g>
+
+      <!-- ======== moka pot (drawn upright, tilted as a group) ======== -->
+      <g id="pot" transform="rotate(-36 960 520)">
+        <rect x="922" y="316" width="46" height="38" rx="7" fill="#141414"/>
+        <path d="M872 350 L1014 350 L1054 622 L830 622 Z" fill="#ABABAB"/>
+        <path d="M872 350 L818 400 L866 418 Z" fill="#ABABAB"/>
+        <rect x="884" y="386" width="34" height="212" rx="17" fill="#C6C6C6" transform="rotate(-4 901 492)"/>
+        <rect x="928" y="384" width="34" height="218" rx="17" fill="#C6C6C6"/>
+        <rect x="972" y="386" width="34" height="212" rx="17" fill="#C6C6C6" transform="rotate(4 989 492)"/>
+        <path d="M846 622 L1038 622 L1090 744 L796 744 Z" fill="#ABABAB"/>
+        <circle cx="1080" cy="402" r="60" fill="none" stroke="#141414" stroke-width="42"/>
+      </g>
+
+      <!-- ======== hand & arm ======== -->
+      <g id="hand">
+        <!-- fingers -->
+        <g fill="#C99180">
+          <rect x="1096" y="128" width="62" height="240" rx="31" transform="rotate(-14 1127 248)"/>
+          <rect x="1186" y="100" width="62" height="250" rx="31" transform="rotate(-4 1217 225)"/>
+          <rect x="1276" y="108" width="62" height="244" rx="31" transform="rotate(6 1307 230)"/>
+          <rect x="1364" y="150" width="62" height="220" rx="31" transform="rotate(15 1395 260)"/>
+        </g>
+        <!-- nails -->
+        <g fill="#E8172D">
+          <rect x="1104" y="140" width="46" height="56" rx="21" transform="rotate(-14 1127 168)"/>
+          <rect x="1194" y="112" width="46" height="56" rx="21" transform="rotate(-4 1217 140)"/>
+          <rect x="1284" y="120" width="46" height="56" rx="21" transform="rotate(6 1307 148)"/>
+          <rect x="1372" y="162" width="46" height="56" rx="21" transform="rotate(15 1395 190)"/>
+        </g>
+        <!-- palm + arm to the right edge -->
+        <path d="M1671 262 C1520 268 1408 276 1330 296 C1236 318 1168 356 1158 424 C1148 498 1214 540 1302 546 C1424 554 1560 556 1671 550 Z" fill="#C99180"/>
+        <!-- thumb wrapping the handle -->
+        <path d="M1168 396 Q1108 366 1092 336" fill="none" stroke="#C99180" stroke-width="58" stroke-linecap="round"/>
+        <rect x="1064" y="300" width="44" height="52" rx="20" fill="#E8172D" transform="rotate(-30 1086 326)"/>
+        <path d="M1180 452 Q1120 460 1096 442" fill="none" stroke="#C99180" stroke-width="54" stroke-linecap="round"/>
+        <rect x="1072" y="414" width="42" height="48" rx="19" fill="#E8172D" transform="rotate(-70 1093 438)"/>
+      </g>
+
+      <!-- ======== rising flood (wave path is generated in app.js) ======== -->
+      <g id="flood" transform="translate(0 1085)">
+        <path id="flood-wave" d="M-260 0 L1940 0 L1940 1400 L-260 1400 Z" fill="#7C2B14"/>
+      </g>
+
+      <!-- ======== typography ======== -->
+      <g class="type type-ink" fill="#141414">
+        <text x="66" y="196" class="t-name">HALEY KIM</text>
+        <text x="70" y="252" class="t-sub">GRAPHIC DESIGNER</text>
+      </g>
+      <a href="#work"><text x="1604" y="126" class="t-work" text-anchor="end" fill="#141414">WORK</text></a>
+      <!-- cream copy revealed by the flood -->
+      <g class="type type-cream" fill="#ECE8E4" clip-path="url(#in-flood)" pointer-events="none">
+        <text x="66" y="196" class="t-name">HALEY KIM</text>
+        <text x="70" y="252" class="t-sub">GRAPHIC DESIGNER</text>
+        <text x="1604" y="126" class="t-work" text-anchor="end">WORK</text>
+      </g>
+    </svg>
+
+    <div class="scroll-hint" id="scroll-hint">
+      <span>scroll to pour</span>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 4v14m0 0l-6-6m6 6l6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PORTFOLIO ============ -->
+<main class="work" id="work">
+  <header class="work-head">
+    <h2>SELECTED WORK</h2>
+    <p>Identity, print &amp; packaging — brewed by hand.</p>
+  </header>
+
+  <ul class="grid">
+    <li class="tile tile-blue"><a href="#"><span class="num">01</span><span class="name">Moka Series</span><span class="cat">Packaging</span></a></li>
+    <li class="tile tile-orange"><a href="#"><span class="num">02</span><span class="name">Persimmon Co.</span><span class="cat">Brand identity</span></a></li>
+    <li class="tile tile-pink"><a href="#"><span class="num">03</span><span class="name">Spill Zine</span><span class="cat">Editorial</span></a></li>
+    <li class="tile tile-cream"><a href="#"><span class="num">04</span><span class="name">Tabletop Type</span><span class="cat">Typography</span></a></li>
+    <li class="tile tile-green"><a href="#"><span class="num">05</span><span class="name">Calyx Fest</span><span class="cat">Poster series</span></a></li>
+    <li class="tile tile-ink"><a href="#"><span class="num">06</span><span class="name">Red Nail Records</span><span class="cat">Art direction</span></a></li>
+  </ul>
+
+  <footer class="foot">
+    <p class="foot-big">LET'S MAKE A MESS TOGETHER</p>
+    <p><a href="mailto:hello@haleykim.design">hello@haleykim.design</a></p>
+    <p class="foot-small">© 2026 Haley Kim</p>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
