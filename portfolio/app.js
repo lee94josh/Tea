@@ -126,12 +126,12 @@
     // the landing point rises as the cup fills, the mound grows, and the flood climbs
     let surfaceY = 806 - 18 * fill - 30 * o1 - 44 * o2;
     surfaceY = Math.min(surfaceY, floodTop - 6);
-    const streamFrac = clamp((surfaceY - 492) / (806 - 492), 0, 1);
+    const streamFrac = clamp((surfaceY - 526) / (806 - 526), 0, 1);
     stream.setAttribute("stroke-dashoffset", streamLen * (1 - draw * streamFrac));
 
     /* --- splash rides the landing point --- */
     const splashOn = seg(p, 0.14, 0.18); // appears when the stream lands
-    const splashOff = clamp((floodTop - 500) / 60, 0, 1); // fades as the spout submerges
+    const splashOff = clamp((floodTop - 540) / 60, 0, 1); // fades as the spout submerges
     const wiggle = Math.sin(p * 90) * 4;
     splash.setAttribute("opacity", Math.min(splashOn, splashOff));
     splash.setAttribute(

@@ -79,7 +79,7 @@
 
       <!-- ======== coffee stream (clipped by the rising flood) ======== -->
       <g clip-path="url(#above-flood)">
-        <path id="stream" d="M784 490 C714 514 674 566 662 645 C654 702 650 752 650 806" fill="none" stroke="#6D3620" stroke-width="52" stroke-linecap="round"/>
+        <path id="stream" d="M772 526 C706 540 674 588 664 656 C656 712 652 760 650 806" fill="none" stroke="#6D3620" stroke-width="52" stroke-linecap="round"/>
       </g>
       <!-- splash at the impact point / liquid surface -->
       <g id="splash" opacity="0">
@@ -94,46 +94,68 @@
 
       <!-- ======== hand: parts that sit BEHIND the pot handle ======== -->
       <g id="hand-under">
-        <!-- forearm + palm, running off the right edge -->
-        <path d="M1671 258 L1452 268 C1352 276 1262 296 1198 332 C1128 370 1116 424 1148 470 C1190 526 1300 550 1420 556 L1671 546 Z" fill="#C99180"/>
-        <!-- three splayed fingers, sinking into the palm so valleys show between them -->
+        <!-- one unified silhouette: forearm, palm, thumb and index lobes, with the
+             OK-pinch window punched as a real hole (evenodd) -->
+        <path fill="#C99180" fill-rule="evenodd" d="
+          M1671 300
+          C1568 296 1506 308 1470 318
+          C1456 304 1438 298 1418 300
+          C1330 280 1240 284 1170 290
+          C1110 260 1044 246 1002 248
+          C960 250 930 260 928 282
+          C926 304 958 314 1002 324
+          C1032 330 1054 334 1060 338
+          C1032 346 1004 362 992 384
+          C982 404 990 418 1008 424
+          C1034 434 1074 442 1116 448
+          C1136 450 1146 452 1152 452
+          C1184 484 1244 508 1312 518
+          C1362 526 1400 520 1416 512
+          C1432 526 1452 530 1466 526
+          C1522 542 1600 544 1671 540
+          Z
+          M1108 358
+          a40 40 0 1 0 0.1 0
+          Z"/>
+        <!-- three splayed fingers, chunky, sinking into the palm -->
         <g fill="#C99180">
-          <rect x="1124" y="128" width="72" height="292" rx="36" transform="rotate(-22 1160 260)"/>
-          <rect x="1226" y="96" width="74" height="306" rx="37" transform="rotate(-5 1263 240)"/>
-          <rect x="1330" y="140" width="72" height="266" rx="36" transform="rotate(13 1366 260)"/>
+          <rect x="1030" y="138" width="88" height="210" rx="44" transform="rotate(-26 1074 243)"/>
+          <rect x="1146" y="92" width="90" height="286" rx="45" transform="rotate(-6 1191 235)"/>
+          <rect x="1262" y="116" width="88" height="244" rx="44" transform="rotate(16 1306 238)"/>
         </g>
-        <!-- nails, inset so a rim of skin shows -->
+        <!-- big nails with a thin rim of skin -->
         <g fill="#E8172D" stroke="#C99180" stroke-width="7">
-          <rect x="1133" y="141" width="54" height="62" rx="24" transform="rotate(-22 1160 172)"/>
-          <rect x="1236" y="109" width="54" height="62" rx="24" transform="rotate(-5 1263 140)"/>
-          <rect x="1339" y="153" width="54" height="62" rx="24" transform="rotate(13 1366 184)"/>
+          <rect x="1042" y="152" width="64" height="68" rx="26" transform="rotate(-26 1074 186)"/>
+          <rect x="1158" y="106" width="66" height="70" rx="27" transform="rotate(-6 1191 141)"/>
+          <rect x="1274" y="130" width="64" height="68" rx="26" transform="rotate(16 1306 164)"/>
         </g>
-        <!-- index finger looping under the handle; its tip peeks through the hole -->
-        <path d="M1218 430 Q1084 424 952 372" fill="none" stroke="#C99180" stroke-width="60" stroke-linecap="round"/>
-        <rect x="929" y="345" width="46" height="54" rx="21" fill="#E8172D" stroke="#C99180" stroke-width="7" transform="rotate(-78 952 372)"/>
+        <!-- index nail poking into the ring at ~4:30 -->
+        <rect x="995" y="371" width="46" height="54" rx="21" fill="#E8172D" stroke="#C99180" stroke-width="7" transform="rotate(-70 1018 398)"/>
       </g>
 
       <!-- ======== moka pot (drawn upright, tilted as a group) ======== -->
       <g id="pot" transform="rotate(-36 960 520)">
-        <rect x="915" y="314" width="50" height="42" rx="9" fill="#141414"/>
-        <!-- lid with pouring lip at the left -->
-        <path d="M862 350 L1018 350 L1026 402 L858 402 L820 384 Z" fill="#ABABAB"/>
-        <rect x="856" y="400" width="172" height="7" fill="#9A9A9A"/>
-        <!-- upper chamber with facets -->
-        <path d="M854 407 L1030 407 L1058 618 L824 618 Z" fill="#ABABAB"/>
-        <rect x="866" y="424" width="36" height="176" rx="18" fill="#C9C9C9" transform="rotate(-4 884 512)"/>
-        <rect x="922" y="420" width="36" height="184" rx="18" fill="#C9C9C9"/>
-        <rect x="978" y="424" width="36" height="176" rx="18" fill="#C9C9C9" transform="rotate(4 996 512)"/>
+        <!-- knob sitting on the roof ridge -->
+        <rect x="930" y="320" width="46" height="38" rx="6" fill="#141414"/>
+        <!-- roof: rises to a ridge, with the pouring beak at its left point -->
+        <path d="M806 420 L928 352 L1008 352 L1040 410 L862 424 Z" fill="#ABABAB"/>
+        <!-- upper chamber with three parallel capsule facets -->
+        <path d="M818 414 L1040 410 L1060 620 L802 620 Z" fill="#ABABAB"/>
+        <g fill="#C7C7C7">
+          <rect x="846" y="428" width="58" height="184" rx="29"/>
+          <rect x="918" y="424" width="58" height="190" rx="29"/>
+          <rect x="990" y="428" width="58" height="184" rx="29"/>
+        </g>
         <!-- base skirt -->
-        <path d="M842 618 L1040 618 L1094 744 L788 744 Z" fill="#ABABAB"/>
-        <!-- handle -->
-        <circle cx="1082" cy="396" r="58" fill="none" stroke="#141414" stroke-width="44"/>
+        <path d="M812 620 L1048 620 L1098 748 L774 748 Z" fill="#ABABAB"/>
+        <!-- handle at the roof's right end -->
+        <circle cx="1078" cy="398" r="62" fill="none" stroke="#141414" stroke-width="46"/>
       </g>
 
-      <!-- ======== thumb: wraps OVER the handle ======== -->
+      <!-- ======== thumb: wraps OVER the handle, nail at 12 o'clock ======== -->
       <g id="hand-over">
-        <path d="M1214 372 Q1078 350 944 300" fill="none" stroke="#C99180" stroke-width="64" stroke-linecap="round"/>
-        <rect x="920" y="274" width="48" height="56" rx="22" fill="#E8172D" stroke="#C99180" stroke-width="7" transform="rotate(-72 944 302)"/>
+        <path d="M1130 318 Q1030 288 962 284" fill="none" stroke="#C99180" stroke-width="68" stroke-linecap="round"/>
+        <rect x="939" y="257" width="46" height="54" rx="21" fill="#E8172D" stroke="#C99180" stroke-width="7" transform="rotate(-82 962 284)"/>
       </g>
 
       <!-- ======== rising flood (wave path is generated in app.js) ======== -->
