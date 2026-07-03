@@ -58,9 +58,9 @@
     const tilt = easeInOut(seg(p, 0, 0.07));
     pot.setAttribute("transform", `rotate(${lerp(-26, -36, tilt)} 960 520)`);
 
-    /* --- phase 1: the stream draws in (0.06–0.16) --- */
+    /* --- phase 1: the stream draws in (0.06–0.16); its actual visible
+       length is set later, once the landing surface is known --- */
     const draw = easeOut(seg(p, 0.06, 0.16));
-    stream.setAttribute("stroke-dashoffset", streamLen * (1 - draw));
 
     /* --- phase 2: cup fills (0.16–0.30) --- */
     const fill = easeInOut(seg(p, 0.16, 0.3));
@@ -75,33 +75,15 @@
       `translate(634 812) scale(${lerp(0.6, 1, o1)}) translate(-634 -812)`
     );
 
-    /* --- phase 4: the cup is engulfed (0.38–0.50) --- */
+    /* --- phase 4: the cup is engulfed; the mound keeps spreading (0.38–0.64) --- */
     const o2 = easeOut(seg(p, 0.38, 0.5));
     overflow2.setAttribute("opacity", o2);
-    // keeps swelling slightly until the flood takes over
-    const swell = lerp(0.4, 1, o2) + 0.12 * easeInOut(seg(p, 0.5, 0.6));
+    const swellY = lerp(0.4, 1, o2) + 0.1 * easeInOut(seg(p, 0.5, 0.62));
+    // liquid conserves itself sideways: the mound widens onto the table
+    const swellX = swellY + 0.5 * easeInOut(seg(p, 0.48, 0.64));
     overflow2.setAttribute(
       "transform",
-      `translate(634 995) scale(${swell}) translate(-634 -995)`
-    );
-
-    /* --- phase 5: spill reaches the persimmon, which sinks (0.46–0.64) --- */
-    const pud = easeOut(seg(p, 0.46, 0.56));
-    puddle.setAttribute("opacity", pud);
-    puddle.setAttribute("rx", lerp(10, 320, pud));
-    puddle.setAttribute("cx", lerp(1000, 1120, pud));
-
-    const sink = easeInOut(seg(p, 0.5, 0.64));
-    const squash = lerp(1, 0.42, sink);
-    persimmon.setAttribute(
-      "transform",
-      `translate(0 ${lerp(0, 115, sink)}) translate(1148 966) scale(1 ${squash}) translate(-1148 -966)`
-    );
-    persimmonShadow.setAttribute("opacity", 1 - seg(p, 0.48, 0.58));
-    // splash lines pulse in while it sinks, gone once it's under
-    persimmonSplash.setAttribute(
-      "opacity",
-      seg(p, 0.5, 0.56) * (1 - seg(p, 0.62, 0.68))
+      `translate(634 995) scale(${swellX} ${swellY}) translate(-634 -995)`
     );
 
     /* --- phase 6: the flood rises and takes the frame (0.54–0.94) --- */
@@ -117,20 +99,44 @@
     // cream typography is revealed by the flood
     inFloodRect.setAttribute("y", floodTop + 2);
 
-    /* --- splash rides the surface --- */
-    // at the cup until the flood passes it, then on the flood surface;
-    // it disappears together with the stream, when the surface reaches the spout
-    const surfaceY = Math.min(800, floodTop - 8);
+    /* --- phase 5: spill reaches the persimmon, which floats (0.46 →) --- */
+    const pud = easeOut(seg(p, 0.46, 0.56));
+    puddle.setAttribute("opacity", pud);
+    puddle.setAttribute("rx", lerp(10, 320, pud));
+    puddle.setAttribute("cx", lerp(1000, 1120, pud));
+
+    // buoyancy: a light bob as the spill arrives, then it rides the rising
+    // flood keeping ~62px of crown above the surface — but only so far;
+    // past that the flood outpaces it and swamps it
+    const bob = easeInOut(seg(p, 0.5, 0.58));
+    const ride = Math.min(0, Math.max(floodTop, 730) - 62 - 774);
+    const ty = Math.min(-10 * bob, ride);
+    const floatActive = bob * clamp((floodTop - 690) / 70, 0, 1);
+    const rot = Math.sin(p * 32) * 3.2 * floatActive;
+    persimmon.setAttribute(
+      "transform",
+      `translate(0 ${ty}) rotate(${rot} 1148 870)`
+    );
+    persimmonShadow.setAttribute("opacity", 1 - seg(p, 0.48, 0.58));
+    // splash lines lap around it at the waterline while it floats
+    persimmonSplash.setAttribute("opacity", floatActive * (1 - seg(p, 0.74, 0.8)));
+    persimmonSplash.setAttribute("transform", `translate(0 ${Math.min(0, floodTop - 946)})`);
+
+    /* --- the stream always lands ON the surface, never through it --- */
+    // the landing point rises as the cup fills, the mound grows, and the flood climbs
+    let surfaceY = 806 - 18 * fill - 30 * o1 - 44 * o2;
+    surfaceY = Math.min(surfaceY, floodTop - 6);
+    const streamFrac = clamp((surfaceY - 492) / (806 - 492), 0, 1);
+    stream.setAttribute("stroke-dashoffset", streamLen * (1 - draw * streamFrac));
+
+    /* --- splash rides the landing point --- */
     const splashOn = seg(p, 0.14, 0.18); // appears when the stream lands
     const splashOff = clamp((floodTop - 500) / 60, 0, 1); // fades as the spout submerges
     const wiggle = Math.sin(p * 90) * 4;
-    splash.setAttribute(
-      "opacity",
-      Math.min(splashOn, splashOff)
-    );
+    splash.setAttribute("opacity", Math.min(splashOn, splashOff));
     splash.setAttribute(
       "transform",
-      `translate(${wiggle} ${surfaceY - 800}) rotate(${wiggle * 0.4} 634 800)`
+      `translate(${wiggle} ${surfaceY - 806}) rotate(${wiggle * 0.4} 650 806)`
     );
 
     /* --- scroll hint --- */

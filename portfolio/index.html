@@ -79,53 +79,61 @@
 
       <!-- ======== coffee stream (clipped by the rising flood) ======== -->
       <g clip-path="url(#above-flood)">
-        <path id="stream" d="M764 486 C640 512 606 646 636 800" fill="none" stroke="#6D3620" stroke-width="42" stroke-linecap="round"/>
+        <path id="stream" d="M784 490 C714 514 674 566 662 645 C654 702 650 752 650 806" fill="none" stroke="#6D3620" stroke-width="52" stroke-linecap="round"/>
       </g>
-      <!-- splash at the impact point / flood surface -->
+      <!-- splash at the impact point / liquid surface -->
       <g id="splash" opacity="0">
-        <g fill="none" stroke="#C58A7B" stroke-width="13" stroke-linecap="round">
-          <path d="M574 800 q22 -26 50 -8"/>
-          <path d="M652 786 q28 -16 54 4"/>
-          <path d="M596 812 q-22 12 -44 2"/>
+        <g fill="none" stroke="#C58A7B" stroke-width="14" stroke-linecap="round">
+          <path d="M584 804 q24 -28 54 -8"/>
+          <path d="M668 790 q30 -16 56 6"/>
+          <path d="M608 818 q-24 12 -46 2"/>
         </g>
-        <ellipse cx="646" cy="778" rx="12" ry="9" fill="#C58A7B"/>
+        <ellipse cx="662" cy="780" rx="13" ry="10" fill="#C58A7B"/>
+        <ellipse cx="590" cy="782" rx="9" ry="7" fill="#C58A7B"/>
+      </g>
+
+      <!-- ======== hand: parts that sit BEHIND the pot handle ======== -->
+      <g id="hand-under">
+        <!-- forearm + palm, running off the right edge -->
+        <path d="M1671 258 L1452 268 C1352 276 1262 296 1198 332 C1128 370 1116 424 1148 470 C1190 526 1300 550 1420 556 L1671 546 Z" fill="#C99180"/>
+        <!-- three splayed fingers, sinking into the palm so valleys show between them -->
+        <g fill="#C99180">
+          <rect x="1124" y="128" width="72" height="292" rx="36" transform="rotate(-22 1160 260)"/>
+          <rect x="1226" y="96" width="74" height="306" rx="37" transform="rotate(-5 1263 240)"/>
+          <rect x="1330" y="140" width="72" height="266" rx="36" transform="rotate(13 1366 260)"/>
+        </g>
+        <!-- nails, inset so a rim of skin shows -->
+        <g fill="#E8172D" stroke="#C99180" stroke-width="7">
+          <rect x="1133" y="141" width="54" height="62" rx="24" transform="rotate(-22 1160 172)"/>
+          <rect x="1236" y="109" width="54" height="62" rx="24" transform="rotate(-5 1263 140)"/>
+          <rect x="1339" y="153" width="54" height="62" rx="24" transform="rotate(13 1366 184)"/>
+        </g>
+        <!-- index finger looping under the handle; its tip peeks through the hole -->
+        <path d="M1218 430 Q1084 424 952 372" fill="none" stroke="#C99180" stroke-width="60" stroke-linecap="round"/>
+        <rect x="929" y="345" width="46" height="54" rx="21" fill="#E8172D" stroke="#C99180" stroke-width="7" transform="rotate(-78 952 372)"/>
       </g>
 
       <!-- ======== moka pot (drawn upright, tilted as a group) ======== -->
       <g id="pot" transform="rotate(-36 960 520)">
-        <rect x="922" y="316" width="46" height="38" rx="7" fill="#141414"/>
-        <path d="M872 350 L1014 350 L1054 622 L830 622 Z" fill="#ABABAB"/>
-        <path d="M872 350 L818 400 L866 418 Z" fill="#ABABAB"/>
-        <rect x="884" y="386" width="34" height="212" rx="17" fill="#C6C6C6" transform="rotate(-4 901 492)"/>
-        <rect x="928" y="384" width="34" height="218" rx="17" fill="#C6C6C6"/>
-        <rect x="972" y="386" width="34" height="212" rx="17" fill="#C6C6C6" transform="rotate(4 989 492)"/>
-        <path d="M846 622 L1038 622 L1090 744 L796 744 Z" fill="#ABABAB"/>
-        <circle cx="1080" cy="402" r="60" fill="none" stroke="#141414" stroke-width="42"/>
+        <rect x="915" y="314" width="50" height="42" rx="9" fill="#141414"/>
+        <!-- lid with pouring lip at the left -->
+        <path d="M862 350 L1018 350 L1026 402 L858 402 L820 384 Z" fill="#ABABAB"/>
+        <rect x="856" y="400" width="172" height="7" fill="#9A9A9A"/>
+        <!-- upper chamber with facets -->
+        <path d="M854 407 L1030 407 L1058 618 L824 618 Z" fill="#ABABAB"/>
+        <rect x="866" y="424" width="36" height="176" rx="18" fill="#C9C9C9" transform="rotate(-4 884 512)"/>
+        <rect x="922" y="420" width="36" height="184" rx="18" fill="#C9C9C9"/>
+        <rect x="978" y="424" width="36" height="176" rx="18" fill="#C9C9C9" transform="rotate(4 996 512)"/>
+        <!-- base skirt -->
+        <path d="M842 618 L1040 618 L1094 744 L788 744 Z" fill="#ABABAB"/>
+        <!-- handle -->
+        <circle cx="1082" cy="396" r="58" fill="none" stroke="#141414" stroke-width="44"/>
       </g>
 
-      <!-- ======== hand & arm ======== -->
-      <g id="hand">
-        <!-- fingers -->
-        <g fill="#C99180">
-          <rect x="1096" y="128" width="62" height="240" rx="31" transform="rotate(-14 1127 248)"/>
-          <rect x="1186" y="100" width="62" height="250" rx="31" transform="rotate(-4 1217 225)"/>
-          <rect x="1276" y="108" width="62" height="244" rx="31" transform="rotate(6 1307 230)"/>
-          <rect x="1364" y="150" width="62" height="220" rx="31" transform="rotate(15 1395 260)"/>
-        </g>
-        <!-- nails -->
-        <g fill="#E8172D">
-          <rect x="1104" y="140" width="46" height="56" rx="21" transform="rotate(-14 1127 168)"/>
-          <rect x="1194" y="112" width="46" height="56" rx="21" transform="rotate(-4 1217 140)"/>
-          <rect x="1284" y="120" width="46" height="56" rx="21" transform="rotate(6 1307 148)"/>
-          <rect x="1372" y="162" width="46" height="56" rx="21" transform="rotate(15 1395 190)"/>
-        </g>
-        <!-- palm + arm to the right edge -->
-        <path d="M1671 262 C1520 268 1408 276 1330 296 C1236 318 1168 356 1158 424 C1148 498 1214 540 1302 546 C1424 554 1560 556 1671 550 Z" fill="#C99180"/>
-        <!-- thumb wrapping the handle -->
-        <path d="M1168 396 Q1108 366 1092 336" fill="none" stroke="#C99180" stroke-width="58" stroke-linecap="round"/>
-        <rect x="1064" y="300" width="44" height="52" rx="20" fill="#E8172D" transform="rotate(-30 1086 326)"/>
-        <path d="M1180 452 Q1120 460 1096 442" fill="none" stroke="#C99180" stroke-width="54" stroke-linecap="round"/>
-        <rect x="1072" y="414" width="42" height="48" rx="19" fill="#E8172D" transform="rotate(-70 1093 438)"/>
+      <!-- ======== thumb: wraps OVER the handle ======== -->
+      <g id="hand-over">
+        <path d="M1214 372 Q1078 350 944 300" fill="none" stroke="#C99180" stroke-width="64" stroke-linecap="round"/>
+        <rect x="920" y="274" width="48" height="56" rx="22" fill="#E8172D" stroke="#C99180" stroke-width="7" transform="rotate(-72 944 302)"/>
       </g>
 
       <!-- ======== rising flood (wave path is generated in app.js) ======== -->
