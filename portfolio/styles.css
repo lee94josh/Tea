@@ -1,14 +1,15 @@
 :root {
-  --paper: #ECE8E4;
-  --ink: #141414;
-  --flood: #7C2B14;
-  --coffee: #6D3620;
-  --blue: #3D52E8;
-  --blue-dark: #1927C9;
-  --orange: #F5A824;
-  --green: #46B021;
-  --pink: #C58A7B;
-  --nail: #E8172D;
+  /* palette lifted from Haley's vector export */
+  --paper: #EDE8E8;
+  --ink: #000000;
+  --flood: #7C2B18;
+  --coffee: #7C2B18;
+  --blue: #3A5FF9;
+  --blue-dark: #1731C9;
+  --orange: #FF931E;
+  --green: #39B54A;
+  --pink: #C48780;
+  --nail: #E50026;
 }
 
 @font-face {

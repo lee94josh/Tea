@@ -1,6 +1,7 @@
 /* Scroll-scrubbed hero: pour → fill → overflow → flood.
    All motion is driven by one progress value (0–1) derived from
-   scroll position within .hero-track, smoothed for fluidity. */
+   scroll position within .hero-track, smoothed for fluidity.
+   Scene geometry comes from Haley's vector export (frame-03-source.svg). */
 
 (function () {
   const track = document.getElementById("hero-track");
@@ -20,8 +21,6 @@
   const floodWave = $("flood-wave");
   const aboveFloodRect = $("above-flood-rect");
   const inFloodRect = $("in-flood-rect");
-
-  const pot = $("pot");
 
   const streamLen = stream.getTotalLength();
   stream.setAttribute("stroke-dasharray", streamLen);
@@ -50,40 +49,45 @@
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // geometry anchors from the vector export
+  const SPOUT_Y = 494.57; // stream start at the pouring beak
+  const IMPACT_Y = 800; // stream end / splash resting height at the cup
+  const CUP = { x: 635.72, y: 823.86 }; // coffee surface center
+  const PERSIMMON = { cx: 1143.58, cy: 878, top: 788.83 };
+
   let target = 0;
   let shown = -1; // force first paint
 
   function apply(p) {
-    /* --- phase 0: the pot tips forward to pour (0–0.07) --- */
-    const tilt = easeInOut(seg(p, 0, 0.07));
-    pot.setAttribute("transform", `rotate(${lerp(-26, -36, tilt)} 960 520)`);
-
-    /* --- phase 1: the stream draws in (0.06–0.16); its actual visible
+    /* --- phase 1: the stream draws in (0.04–0.15); its actual visible
        length is set later, once the landing surface is known --- */
-    const draw = easeOut(seg(p, 0.06, 0.16));
+    const draw = easeOut(seg(p, 0.04, 0.15));
 
-    /* --- phase 2: cup fills (0.16–0.30) --- */
-    const fill = easeInOut(seg(p, 0.16, 0.3));
-    cupCoffee.setAttribute("y", lerp(842, 786, fill));
-    cupCoffee.setAttribute("height", 130);
+    /* --- phase 2: cup fills — the coffee surface spreads to the rim (0.15–0.30) --- */
+    const fill = easeInOut(seg(p, 0.15, 0.3));
+    cupCoffee.setAttribute(
+      "transform",
+      `translate(${CUP.x} ${CUP.y}) scale(${fill}) translate(${-CUP.x} ${-CUP.y})`
+    );
 
     /* --- phase 3: overflow dome + drips (0.30–0.40) --- */
     const o1 = easeOut(seg(p, 0.3, 0.4));
     overflow1.setAttribute("opacity", o1);
     overflow1.setAttribute(
       "transform",
-      `translate(634 812) scale(${lerp(0.6, 1, o1)}) translate(-634 -812)`
+      `translate(${CUP.x} 823) scale(${lerp(0.6, 1, o1)}) translate(${-CUP.x} -823)`
     );
 
     /* --- phase 4: the cup is engulfed; the mound keeps spreading (0.38–0.64) --- */
     const o2 = easeOut(seg(p, 0.38, 0.5));
-    overflow2.setAttribute("opacity", o2);
+    // reach full opacity early so underlying shapes don't ghost through mid-scrub
+    overflow2.setAttribute("opacity", Math.min(1, o2 * 1.8));
     const swellY = lerp(0.4, 1, o2) + 0.1 * easeInOut(seg(p, 0.5, 0.62));
     // liquid conserves itself sideways: the mound widens onto the table
     const swellX = swellY + 0.5 * easeInOut(seg(p, 0.48, 0.64));
     overflow2.setAttribute(
       "transform",
-      `translate(634 995) scale(${swellX} ${swellY}) translate(-634 -995)`
+      `translate(${CUP.x} 995) scale(${swellX} ${swellY}) translate(${-CUP.x} -995)`
     );
 
     /* --- phase 6: the flood rises and takes the frame (0.54–0.94) --- */
@@ -94,8 +98,9 @@
     flood.setAttribute("transform", `translate(${driftX} ${floodTop})`);
     flood.style.pointerEvents = "none";
 
-    // stream exists only above the flood surface (crest sits ~16 above the group origin)
-    aboveFloodRect.setAttribute("height", Math.max(0, floodTop - 16 + 200));
+    // stream exists only above the flood surface (clip to mid-wave so the
+    // stream's end never hovers above a trough)
+    aboveFloodRect.setAttribute("height", Math.max(0, floodTop + 200));
     // cream typography is revealed by the flood
     inFloodRect.setAttribute("y", floodTop + 2);
 
@@ -109,13 +114,13 @@
     // flood keeping ~62px of crown above the surface — but only so far;
     // past that the flood outpaces it and swamps it
     const bob = easeInOut(seg(p, 0.5, 0.58));
-    const ride = Math.min(0, Math.max(floodTop, 730) - 62 - 774);
+    const ride = Math.min(0, Math.max(floodTop, 730) - 62 - PERSIMMON.top);
     const ty = Math.min(-10 * bob, ride);
     const floatActive = bob * clamp((floodTop - 690) / 70, 0, 1);
     const rot = Math.sin(p * 32) * 3.2 * floatActive;
     persimmon.setAttribute(
       "transform",
-      `translate(0 ${ty}) rotate(${rot} 1148 870)`
+      `translate(0 ${ty}) rotate(${rot} ${PERSIMMON.cx} ${PERSIMMON.cy})`
     );
     persimmonShadow.setAttribute("opacity", 1 - seg(p, 0.48, 0.58));
     // splash lines lap around it at the waterline while it floats
@@ -124,19 +129,19 @@
 
     /* --- the stream always lands ON the surface, never through it --- */
     // the landing point rises as the cup fills, the mound grows, and the flood climbs
-    let surfaceY = 806 - 18 * fill - 30 * o1 - 44 * o2;
+    let surfaceY = IMPACT_Y - 14 * fill - 26 * o1 - 44 * o2;
     surfaceY = Math.min(surfaceY, floodTop - 6);
-    const streamFrac = clamp((surfaceY - 526) / (806 - 526), 0, 1);
+    const streamFrac = clamp((surfaceY - SPOUT_Y) / (IMPACT_Y - SPOUT_Y), 0, 1);
     stream.setAttribute("stroke-dashoffset", streamLen * (1 - draw * streamFrac));
 
     /* --- splash rides the landing point --- */
-    const splashOn = seg(p, 0.14, 0.18); // appears when the stream lands
-    const splashOff = clamp((floodTop - 540) / 60, 0, 1); // fades as the spout submerges
+    const splashOn = seg(p, 0.13, 0.17); // appears when the stream lands
+    const splashOff = clamp((floodTop - 534) / 60, 0, 1); // fades as the spout submerges
     const wiggle = Math.sin(p * 90) * 4;
     splash.setAttribute("opacity", Math.min(splashOn, splashOff));
     splash.setAttribute(
       "transform",
-      `translate(${wiggle} ${surfaceY - 806}) rotate(${wiggle * 0.4} 650 806)`
+      `translate(${wiggle} ${surfaceY - IMPACT_Y}) rotate(${wiggle * 0.4} 632 ${IMPACT_Y})`
     );
 
     /* --- scroll hint --- */
