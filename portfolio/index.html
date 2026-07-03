@@ -40,13 +40,9 @@
         <clipPath id="clippath">
           <path class="cls-1" d="M1021.54,112.83v384.75h664.24V112.83h-664.24ZM1050.01,377.57h0c-5.09,0-10.08-1.42-14.42-4.11-11.51-7.11-16.09-21.45-10.98-33.83,7.94.81,15.89,2.9,23.54,6.39,9.78,4.46,18.29,10.82,25.2,18.65-5.07,8.08-13.77,12.9-23.33,12.9Z"/>
         </clipPath>
-        <!-- clips everything ABOVE the rising flood (used for the stream) -->
-        <clipPath id="above-flood">
-          <rect id="above-flood-rect" x="-100" y="-200" width="1900" height="1290"/>
-        </clipPath>
-        <!-- clips to the flood itself (used for the cream text reveal) -->
-        <clipPath id="in-flood">
-          <rect id="in-flood-rect" x="-100" y="1090" width="1900" height="1400"/>
+        <!-- clips to the liquid body (cream text flips exactly at the waterline) -->
+        <clipPath id="liquid-clip">
+          <path id="liquid-clip-path" d=""/>
         </clipPath>
       </defs>
 
@@ -59,7 +55,6 @@
       <ellipse id="persimmon-shadow" cx="1143.27" cy="964.59" rx="139.95" ry="24.57"/>
 
       <!-- ======== persimmon ======== -->
-      <ellipse id="puddle" cx="1000" cy="952" rx="10" ry="24" fill="#7c2b18" opacity="0"/>
       <g id="persimmon">
         <rect class="cls-6" x="1010.06" y="788.83" width="267.04" height="178.38" rx="65.1" ry="65.1"/>
         <g>
@@ -80,27 +75,24 @@
       <path class="cls-3" d="M467.4,853.02c-23.4-15.23-54.72-8.61-69.95,14.79-15.23,23.4-8.61,54.72,14.79,69.95s54.72,8.61,69.95-14.79"/>
       <path class="cls-8" d="M448.99,819.58h373.99c0,97.98-79.55,177.54-177.54,177.54h-18.91c-97.98,0-177.54-79.55-177.54-177.54h0Z"/>
       <path class="cls-10" d="M635.72,867.7c-47.96,0-93.14-3.58-127.22-10.09-40.96-7.82-60.04-18.54-60.04-33.75s19.08-25.93,60.04-33.75c34.08-6.51,79.26-10.09,127.22-10.09s93.14,3.58,127.22,10.09c40.96,7.82,60.04,18.55,60.04,33.75s-19.08,25.93-60.04,33.75c-34.08,6.51-79.26,10.09-127.22,10.09Z"/>
-      <!-- coffee surface in the cup (grows from nothing as it fills) -->
-      <ellipse id="cup-coffee" class="cls-12" cx="635.72" cy="823.86" rx="165.06" ry="31.51"/>
+      <!-- coffee surface in the cup: depth, width and perspective are
+           interpolated per frame as the level rises -->
+      <ellipse id="cup-coffee" class="cls-12" cx="635.72" cy="838" rx="0" ry="0"/>
 
-      <!-- overflow stage 1: dome over the rim + drips down the bowl -->
-      <g id="overflow1" opacity="0" fill="#7c2b18">
-        <ellipse cx="635.7" cy="812" rx="196" ry="48"/>
-        <ellipse cx="635.7" cy="788" rx="122" ry="42"/>
-        <rect x="464" y="822" width="34" height="86" rx="17"/>
-        <rect x="526" y="824" width="30" height="56" rx="15"/>
-        <rect x="702" y="824" width="32" height="70" rx="16"/>
-        <rect x="764" y="820" width="34" height="104" rx="17"/>
+      <!-- drips running down the bowl as it overflows (dash-drawn) -->
+      <g id="drips" fill="none" stroke="#7c2b18" stroke-linecap="round">
+        <path id="drip0" d="M505 826 L505 956" stroke-width="24"/>
+        <path id="drip1" d="M566 828 L566 908" stroke-width="18"/>
+        <path id="drip2" d="M702 828 L702 936" stroke-width="20"/>
+        <path id="drip3" d="M768 824 L768 976" stroke-width="26"/>
       </g>
-      <!-- overflow stage 2: whole cup engulfed -->
-      <g id="overflow2" opacity="0">
-        <path d="M398 982 C380 862 478 716 635.7 712 C794 716 892 862 874 982 C876 1002 858 1010 832 1002 C820 1022 794 1024 778 1006 C762 1026 732 1026 718 1006 C702 1028 670 1028 656 1006 C638 1026 608 1024 596 1004 C578 1022 550 1020 540 1000 C522 1014 496 1010 490 992 C468 1002 444 996 440 980 C420 986 400 990 398 982 Z" fill="#7c2b18"/>
-      </g>
+      <!-- glaze sheet sliding down the cup (geometry generated per frame) -->
+      <path id="sheet" fill="#7c2b18" d=""/>
 
-      <!-- ======== coffee stream (clipped by the rising flood) ======== -->
-      <g clip-path="url(#above-flood)">
-        <path id="stream" class="cls-2" d="M772.56,494.57c-89.49,0-140.7,75.22-140.7,157.27v146.38"/>
-      </g>
+      <!-- ======== coffee stream (length resolved against the liquid surface) ======== -->
+      <path id="stream" class="cls-2" d="M772.56,494.57c-89.49,0-140.7,75.22-140.7,157.27v146.38"/>
+      <!-- falling droplet head while the stream draws in -->
+      <ellipse id="droplet" rx="13" ry="17" fill="#7c2b18" opacity="0"/>
       <!-- splash at the impact point / liquid surface -->
       <g id="splash" opacity="0">
         <path class="cls-11" d="M588,801.2c-1.81-.02-3.71-.02-5.29.85-3.81,2.07-3.7,7.49-3.06,11.79,3.85-.25,7.7-.49,11.55-.74,1.24-.08,2.64-.1,3.51.78,1.07,1.08.73,2.84.76,4.36.09,5.67,7.69,9.57,12.35,6.35,2.77-1.91,4.38-5.61,7.66-6.37,3.5-.81,6.6,2.15,9.21,4.62,2.61,2.47,6.64,4.74,9.55,2.62,1.63-1.18,2.2-3.34,3.52-4.87,2.57-2.96,7.26-2.79,10.93-1.45,3.68,1.35,7.06,3.62,10.94,4.17,5.47.78,11.6-2.93,13.58-8.11s-3.49-10.34-8.18-11.95c-2.24-.77-4.67-.74-7.04-.7-4.42.08-9.49.47-12.13,4.02-3.13,4.21-2.76,5.15-8.12,4.64s-10.22-.8-15.31-1.54c-1.82-.27-3.68-.57-5.28-1.49-2.44-1.39-3.91-3.97-5.92-5.93-4.2-4.08-17.59-1.01-23.22-1.07Z"/>
@@ -125,7 +117,7 @@
           <path class="cls-9" d="M1065.97,338.64l-18.48,21.17c-2.79,3.21-7.66,3.54-10.87.74l-5.24-4.58c-5.14-4.48-6.93-11.38-5.15-17.53.67-2.31,1.84-4.5,3.52-6.43l3.32-3.81,5.07-5.8,2.58-2.96c.87-1,1.9-1.78,3.01-2.34,3.46-1.73,7.77-1.31,10.86,1.39l10.63,9.28c3.21,2.79,3.54,7.66.75,10.87Z"/>
           <path class="cls-9" d="M1084.65,437.73l-4.75,8.64c-3.85,6.99-12.63,9.54-19.61,5.69l-5.58-3.06-1.25-.69c-4.18-2.3-7.22-5.85-8.93-9.93,0-.03-.02-.05-.03-.07-2.29-5.51-2.14-11.96.96-17.59l1.93-3.5c2.56-4.66,8.42-6.36,13.08-3.79l20.39,11.22c4.66,2.56,6.36,8.42,3.79,13.08Z"/>
         </g>
-        <g>
+        <g id="pot-swing">
           <path d="M1057.42,477.88c-4.41,2.8-9.14,5.16-14.15,7.03-18.82,7.03-39.25,6.32-57.53-2.02-10.05-4.58-14.48-16.44-9.9-26.5,4.58-10.05,16.44-14.48,26.49-9.9,8.56,3.9,18.12,4.24,26.93.95s15.81-9.82,19.71-18.37c3.9-8.56,4.24-18.12.95-26.93-3.29-8.81-9.82-15.81-18.37-19.71-17.66-8.06-38.59-.23-46.64,17.43-4.58,10.05-16.44,14.48-26.49,9.9s-14.48-16.44-9.9-26.5c17.21-37.73,61.9-54.43,99.63-37.23,18.28,8.33,32.22,23.29,39.25,42.11,7.03,18.82,6.32,39.25-2.02,57.53-6.12,13.41-15.8,24.49-27.96,32.22Z"/>
           <polygon class="cls-22" points="834.73 364.59 770.97 482.53 968.58 356.97 834.73 364.59"/>
           <polygon class="cls-7" points="1047.94 556.46 917.86 639.12 770.97 482.53 968.58 356.97 1047.94 556.46"/>
@@ -155,19 +147,19 @@
         </g>
       </g>
 
-      <!-- ======== rising flood (wave path is generated in app.js) ======== -->
-      <g id="flood" transform="translate(0 1085)">
-        <path id="flood-wave" d="M-260 0 L1940 0 L1940 1400 L-260 1400 Z" fill="#7c2b18"/>
-      </g>
-
-      <!-- ======== typography ======== -->
+      <!-- ======== typography (ink sits under the liquid) ======== -->
       <g class="type type-ink" fill="#000000">
         <text x="62" y="176" class="t-name">HALEY KIM</text>
         <text x="64" y="238" class="t-sub">GRAPHIC DESIGNER</text>
       </g>
       <a href="#work"><text x="1596" y="122" class="t-work" text-anchor="end" fill="#000000">WORK</text></a>
-      <!-- cream copy revealed by the flood -->
-      <g class="type type-cream" fill="#EDE8E8" clip-path="url(#in-flood)" pointer-events="none">
+
+      <!-- ======== the liquid body: mound + spill + flood as one surface,
+           rebuilt every frame from surface(x) ======== -->
+      <path id="liquid" fill="#7c2b18" d="" pointer-events="none"/>
+
+      <!-- cream copy revealed by the liquid -->
+      <g class="type type-cream" fill="#EDE8E8" clip-path="url(#liquid-clip)" pointer-events="none">
         <text x="62" y="176" class="t-name">HALEY KIM</text>
         <text x="64" y="238" class="t-sub">GRAPHIC DESIGNER</text>
         <text x="1596" y="122" class="t-work" text-anchor="end">WORK</text>
