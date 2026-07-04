@@ -83,6 +83,12 @@ body {
   font-size: 44px;
   letter-spacing: 2px;
 }
+.t-tease {
+  font-family: "Oswald", "Arial Narrow", sans-serif;
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: 7px;
+}
 #scene a { cursor: pointer; }
 #scene a:hover .t-work { fill: var(--nail); }
 
