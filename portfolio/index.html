@@ -44,6 +44,11 @@
         <clipPath id="liquid-clip">
           <path id="liquid-clip-path" d=""/>
         </clipPath>
+        <!-- the persimmon's rising waterline: clips a brown copy of the
+             fruit's own shapes, so edges coincide exactly (no halo) -->
+        <clipPath id="persimmon-dip-clip">
+          <rect id="persimmon-dip-rect" x="980" y="2000" width="330" height="640"/>
+        </clipPath>
       </defs>
 
       <!-- background + table -->
@@ -54,19 +59,6 @@
       <ellipse id="cup-shadow" cx="623.73" cy="992.35" rx="196.25" ry="31.36"/>
       <ellipse id="persimmon-shadow" cx="1143.27" cy="964.59" rx="139.95" ry="24.57"/>
 
-      <!-- ======== persimmon ======== -->
-      <g id="persimmon">
-        <rect class="cls-6" x="1010.06" y="788.83" width="267.04" height="178.38" rx="65.1" ry="65.1"/>
-        <g>
-          <ellipse class="cls-13" cx="1111.95" cy="797.95" rx="40.16" ry="14.88"/>
-          <ellipse class="cls-13" cx="1175.21" cy="797.95" rx="40.16" ry="14.88"/>
-          <ellipse class="cls-13" cx="1142.21" cy="820.59" rx="40.16" ry="14.88"/>
-          <ellipse class="cls-13" cx="1142.21" cy="783.07" rx="40.16" ry="14.88"/>
-          <ellipse class="cls-4" cx="1143.58" cy="797.95" rx="32.39" ry="12"/>
-        </g>
-      </g>
-      <!-- the spill's front edge advancing across the fruit's footprint -->
-      <rect id="fruit-puddle" x="995" y="893" width="300" height="0" fill="#7c2b18"/>
       <!-- ======== cup ======== -->
       <g id="cup-handle">
         <path class="cls-3" d="M467.4,853.02c-23.4-15.23-54.72-8.61-69.95,14.79-15.23,23.4-8.61,54.72,14.79,69.95s54.72,8.61,69.95-14.79"/>
@@ -144,6 +136,30 @@
       <!-- ======== the liquid body: mound + spill + flood as one surface,
            rebuilt every frame from surface(x) ======== -->
       <path id="liquid" fill="#7c2b18" d="" pointer-events="none"/>
+
+      <!-- ======== persimmon: in FRONT of the pool. Its own waterline mask
+           rises from its base as the local pool deepens; when the mask
+           covers it fully it becomes flood-colored and vanishes. ======== -->
+      <g id="persimmon">
+        <rect class="cls-6" x="1010.06" y="788.83" width="267.04" height="178.38" rx="65.1" ry="65.1"/>
+        <g>
+          <ellipse class="cls-13" cx="1111.95" cy="797.95" rx="40.16" ry="14.88"/>
+          <ellipse class="cls-13" cx="1175.21" cy="797.95" rx="40.16" ry="14.88"/>
+          <ellipse class="cls-13" cx="1142.21" cy="820.59" rx="40.16" ry="14.88"/>
+          <ellipse class="cls-13" cx="1142.21" cy="783.07" rx="40.16" ry="14.88"/>
+          <ellipse class="cls-4" cx="1143.58" cy="797.95" rx="32.39" ry="12"/>
+        </g>
+        <!-- submerged portion: the same shapes in liquid brown, revealed
+             from the base upward by the waterline clip -->
+        <g fill="#7c2b18" clip-path="url(#persimmon-dip-clip)">
+          <rect x="1010.06" y="788.83" width="267.04" height="178.38" rx="65.1" ry="65.1"/>
+          <ellipse cx="1111.95" cy="797.95" rx="40.16" ry="14.88"/>
+          <ellipse cx="1175.21" cy="797.95" rx="40.16" ry="14.88"/>
+          <ellipse cx="1142.21" cy="820.59" rx="40.16" ry="14.88"/>
+          <ellipse cx="1142.21" cy="783.07" rx="40.16" ry="14.88"/>
+          <ellipse cx="1143.58" cy="797.95" rx="32.39" ry="12" fill="none" stroke="#7c2b18" stroke-width="4"/>
+        </g>
+      </g>
 
       <!-- ripples expanding from the pour's landing point on open liquid -->
       <g id="ripples" fill="none" stroke="#c48780" stroke-width="6" stroke-linecap="round">
