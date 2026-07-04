@@ -21,7 +21,7 @@
   const liquidClip = $("liquid-clip-path");
   const persimmon = $("persimmon");
   const persimmonShadow = $("persimmon-shadow");
-  const fruitPuddle = $("fruit-puddle");
+  const persimmonDipRect = $("persimmon-dip-rect");
   const splash = $("splash");
   const cupShadow = $("cup-shadow");
   const cupHandle = $("cup-handle");
@@ -358,10 +358,10 @@
     let cy = lerp(lerp(839, CUP.rimY, level), 823.5, bulge);
     let rx = level <= 0 ? 0 : lerp(lerp(92, CUP.rimRx, level), 176, bulge);
     let ryT = lerp(lerp(17, CUP.rimRy, level), 42, bulge);
-    let ryB = lerp(lerp(17, CUP.rimRy, level), 40, bulge);
+    let ryB = lerp(lerp(17, CUP.rimRy, level), 45, bulge);
     rx = lerp(rx, 192, wrapP);
     ryT = lerp(ryT, 55, wrapP);
-    ryB = lerp(ryB, 46, wrapP);
+    ryB = lerp(ryB, 48.5, wrapP);
     const dripList = DRIPS.map((d) => {
       const lipY = cy + ryB * Math.sqrt(Math.max(0, 1 - Math.pow((d.x - CUP.cx) / Math.max(rx, 1), 2)));
       const maxLen = 985 - lipY; // runs the bowl's face down to its base
@@ -389,26 +389,38 @@
     const dimpleActive = clamp((IMPACT_Y - sNoDimple) / 60, 0, 1) * clamp((sNoDimple - 545) / 50, 0, 1);
     DIMPLE = 9 * dimpleActive;
 
-    /* --- persimmon: buoyant on the actual surface --- */
+    /* --- persimmon: in FRONT of the pool. Its own waterline starts at
+       its base and climbs as the local pool deepens — the fruit floats
+       when it has displaced enough, drifts down-current, and is swamped
+       when the flood outruns its draft. Submersion is a silhouette-
+       clipped mask rising from the base, so coverage always comes from
+       BELOW, never from the table-horizon line. --- */
     const drift = 40 * easeInOut(seg(p, 0.58, 0.76));
     FB_X = PERSIMMON.cx + drift;
     FB_A = 0; // fruit displacement is set after buoyancy below
-    const waterline = surfaceCore(FB_X);
-    const draft = 112 + 460 * easeInOut(seg(p, 0.7, 0.8));
-    const ty = Math.min(0, waterline + draft - PERSIMMON.base);
+    const fruitDeficit = moundAt(PERSIMMON.cx) + R;
+    // the waterline on the fruit, climbing from its base with pool depth
+    const fruitWater = PERSIMMON.base - 1.8 * fruitDeficit;
+    const draft = 100 + 460 * easeInOut(seg(p, 0.7, 0.8));
+    const ty = Math.min(0, fruitWater + draft - PERSIMMON.base);
     const slope = (surfaceCore(FB_X + 40) - surfaceCore(FB_X - 40)) / 80;
     const rot = clamp(-slope * 55, -7, 7) * clamp(-ty / 40, 0, 1);
     persimmon.setAttribute(
       "transform",
       `translate(${drift.toFixed(1)} ${ty.toFixed(1)}) rotate(${rot.toFixed(2)} ${PERSIMMON.cx} 878)`
     );
-    const fruitDeficit = moundAt(PERSIMMON.cx) + R;
     persimmonShadow.setAttribute(
       "opacity",
-      Math.min(clamp(1 + ty / 28, 0, 1), 1 - seg(fruitDeficit, 2, 9)).toFixed(3)
+      Math.min(clamp(1 + ty / 28, 0, 1), 1 - seg(fruitDeficit, 0.3, 2)).toFixed(3)
     );
-    // the puddle front sweeps toward the viewer across the fruit's footprint
-    fruitPuddle.setAttribute("height", (105 * easeInOut(seg(fruitDeficit, 0.1, 1.2))).toFixed(1));
+    // the waterline clip sits at the fruit's waterline (group-local:
+    // subtract the float lift), kept world-horizontal against the tilt
+    const dipY = fruitDeficit > 0.15 ? fruitWater - ty : 2000;
+    persimmonDipRect.setAttribute("y", dipY.toFixed(1));
+    persimmonDipRect.setAttribute(
+      "transform",
+      `rotate(${(-rot).toFixed(2)} ${PERSIMMON.cx} ${dipY.toFixed(1)})`
+    );
     // the floating fruit lifts the surface around itself
     FB_A = clamp(-ty * 0.15, 0, 13) * (1 - seg(p, 0.72, 0.8));
 
