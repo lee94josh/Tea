@@ -122,7 +122,16 @@ body {
 
 /* ============ portfolio ============ */
 
+/* the portfolio rises up OUT of the flood: it overlaps the last screen of
+   the hero track and slides over the pinned, fully-flooded hero. Its
+   background is the coffee colour, so the seam is invisible — the coffee
+   simply becomes the portfolio, and the cream heading and tiles emerge
+   from the liquid. */
 .work {
+  position: relative;
+  z-index: 5;
+  margin-top: -160vh; /* overlap tuned so the heading crests as the coffee
+                         hits ~70% and the tiles are up by full coverage */
   background: var(--flood);
   padding: clamp(48px, 8vw, 120px) clamp(24px, 6vw, 96px);
 }
