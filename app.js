@@ -494,10 +494,12 @@
       el.setAttribute("opacity", (ripActive * (1 - ph) * seg(ph, 0, 0.08) * 0.85).toFixed(3));
     });
 
-    /* --- the release: SELECTED WORK rises out of the liquid --- */
-    const tp = seg(p, 0.92, 1);
-    workTease.setAttribute("opacity", seg(p, 0.92, 0.97).toFixed(3));
-    workTease.setAttribute("transform", `translate(0 ${lerp(48, 0, easeOut(tp)).toFixed(1)})`);
+    /* --- the release: SELECTED WORK rises out of the liquid as the flood
+       takes over the screen, so the payoff is already climbing by the time
+       the coffee fills the frame (no dead flat-brown stretch) --- */
+    const tp = seg(p, 0.78, 0.93);
+    workTease.setAttribute("opacity", seg(p, 0.78, 0.87).toFixed(3));
+    workTease.setAttribute("transform", `translate(0 ${lerp(56, 0, easeOut(tp)).toFixed(1)})`);
 
     /* --- scroll hint --- */
     hint.style.opacity = 1 - seg(p, 0.0, 0.05);
