@@ -91,38 +91,59 @@
     return 0;
   }
 
-  /* One closed contour for the stream: right flank out from the spout,
-     rounded tip cap, left flank back — all from a width profile.
-     While falling, the tip gathers into a droplet head with a neck
-     behind it; once landed, the end flares at contact and the contour
-     closes BELOW the surface, merging into the pool with no seam. */
-  function buildStreamPath(shownLen, tipFree) {
+  /* One closed contour for the stream: rounded back-cap into the beak,
+     right flank down, rounded tip cap, left flank back — all from a
+     width profile. While falling, the tip gathers into a droplet head
+     with a neck behind it; once landed, the end flares at contact and
+     the contour closes BELOW the surface, merging into the pool.
+     The spine's top is warped to follow the pot's rotation (decaying to
+     zero at the landing), so the pour always leaves the beak. */
+  function buildStreamPath(shownLen, tipFree, tiltDeg) {
     if (shownLen < 6) return "";
     const endLen = tipFree ? shownLen : Math.min(streamLen, shownLen + 10);
-    const right = [], left = [];
-    const N = 24;
-    for (let i = 0; i <= N; i++) {
-      const l = (endLen * i) / N;
+    const tiltRad = (tiltDeg * Math.PI) / 180;
+    const headScale = clamp(endLen / 80, 0, 1);
+
+    // spine frame at arc length l, rotated about the ring by the pot's
+    // tilt, with influence fading downstream so the landing stays put
+    function frameAt(l) {
       const s = sampleSpine(l);
+      const a = tiltRad * Math.exp(-l / 90);
+      if (Math.abs(a) < 1e-4) return s;
+      const c = Math.cos(a), sn = Math.sin(a);
+      const dx = s.x - RING.cx, dy = s.y - RING.cy;
+      return {
+        x: RING.cx + dx * c - dy * sn,
+        y: RING.cy + dx * sn + dy * c,
+        tx: s.tx * c - s.ty * sn, ty: s.tx * sn + s.ty * c,
+        nx: s.nx * c - s.ny * sn, ny: s.nx * sn + s.ny * c,
+      };
+    }
+    function halfW(l) {
       const u = l / streamLen;
       // her stroke was 24 wide: taper gently as the fall accelerates
-      let hw = lerp(13.2, 9.6, u) + 1.6 * Math.exp(-l / 30);
+      let hw = lerp(13.2, 9.6, u) + 1.2 * Math.exp(-l / 34);
       if (tipFree) {
         // neck behind the head, then the gathered droplet head itself
-        // (the head grows in as the stream establishes, so the first
-        // instants read as liquid swelling from the beak, not a blob)
-        const headScale = clamp(endLen / 80, 0, 1);
-        hw *= 1 - 0.32 * headScale * Math.exp(-Math.pow((endLen - 46 - l) / 20, 2));
+        hw *= 1 - 0.26 * headScale * Math.exp(-Math.pow((endLen - 48 - l) / 24, 2));
         hw += 6 * headScale * Math.exp(-Math.pow((endLen - l) / 24, 2));
       } else {
         hw *= 1 + 0.28 * Math.exp(-Math.pow((endLen - l) / 30, 2)); // piles at contact
       }
-      right.push([s.x + s.nx * hw, s.y + s.ny * hw]);
-      left.push([s.x - s.nx * hw, s.y - s.ny * hw]);
+      return hw;
     }
-    // rounded tip cap, traced as part of the same boundary
-    const e = sampleSpine(endLen);
-    const capR = tipFree ? 6 + lerp(13.2, 9.6, endLen / streamLen) * 0.72 : 10;
+
+    const right = [], left = [];
+    const N = 24;
+    for (let i = 0; i <= N; i++) {
+      const l = (endLen * i) / N;
+      const f = frameAt(l), hw = halfW(l);
+      right.push([f.x + f.nx * hw, f.y + f.ny * hw]);
+      left.push([f.x - f.nx * hw, f.y - f.ny * hw]);
+    }
+    // tip cap: radius equals the flank width at the end, so the cap
+    // joins the flanks with no nub
+    const e = frameAt(endLen), capR = halfW(endLen);
     const cap = [];
     for (const a of [0.45, 0.95, Math.PI / 2, 2.2, 2.7]) {
       cap.push([
@@ -130,9 +151,17 @@
         e.y + capR * (Math.cos(a) * e.ny + Math.sin(a) * e.ty),
       ]);
     }
-    // the spout end closes via the smooth wrap of the closed path itself —
-    // a curved segment, hidden behind the pot's beak
-    const pts = right.concat(cap, left.reverse());
+    // explicit rounded back-cap bulging into the beak (hidden by the
+    // pot, but curved and controlled — no wrap-closure lumps)
+    const b0 = frameAt(0), backR = halfW(0);
+    const back = [];
+    for (const a of [2.7, 2.1, Math.PI / 2, 1.05, 0.45]) {
+      back.push([
+        b0.x + backR * (Math.cos(a) * b0.nx - Math.sin(a) * b0.tx),
+        b0.y + backR * (Math.cos(a) * b0.ny - Math.sin(a) * b0.ty),
+      ]);
+    }
+    const pts = right.concat(cap, left.reverse(), back);
     return smoothClosedPath(pts);
   }
 
@@ -269,11 +298,8 @@
     const lean = clamp(vel * 160, -4, 4);
     const tilt = lerp(-12, 0, easeOutBack(seg(p, 0, 0.085))) + lean;
     potSwing.setAttribute("transform", `rotate(${tilt.toFixed(2)} ${RING.cx} ${RING.cy})`);
-    const sway = clamp(vel * 220, -6, 6);
-    streamSway.setAttribute(
-      "transform",
-      `translate(772.56 494.57) skewX(${(-sway).toFixed(2)}) translate(-772.56 -494.57)`
-    );
+    // (the stream follows the pot via the spine warp in buildStreamPath —
+    // no skew trick needed)
 
     /* --- cup fill → meniscus → overflow dome, as one lens --- */
     const level = easeInOut(seg(p, 0.145, 0.3));
@@ -365,7 +391,7 @@
     const shownLen = Math.min(draw * streamLen, lenAtLanding);
     // the tip is free (gathered droplet head) until it reaches the surface
     const tipFree = shownLen < lenAtLanding - 2;
-    streamBody.setAttribute("d", buildStreamPath(shownLen, tipFree));
+    streamBody.setAttribute("d", buildStreamPath(shownLen, tipFree, tilt));
 
     /* --- splash scales in softly at the landing, rides the surface --- */
     const splashIn = easeOutBack(seg(p, 0.138, 0.172));
