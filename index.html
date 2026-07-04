@@ -99,12 +99,14 @@
         <ellipse id="fall-drop1" rx="7" ry="10" opacity="0"/>
       </g>
 
-      <!-- ======== coffee stream (length resolved against the liquid surface) ======== -->
+      <!-- ======== coffee stream: ONE traced contour (spine + width profile),
+           regenerated every frame. The spine path is geometry input only —
+           it never renders. The falling droplet head is the gathered tip of
+           the same boundary, not a separate element. ======== -->
       <g id="stream-sway">
-        <path id="stream" class="cls-2" d="M772.56,494.57c-89.49,0-140.7,75.22-140.7,157.27v146.38"/>
+        <path id="stream" d="M772.56,494.57c-89.49,0-140.7,75.22-140.7,157.27v146.38" fill="none" stroke="none"/>
+        <path id="stream-body" fill="#7c2b18" d=""/>
       </g>
-      <!-- falling droplet head while the stream draws in -->
-      <ellipse id="droplet" rx="13" ry="17" fill="#7c2b18" opacity="0"/>
 
       <!-- ======== hand + moka pot (Haley's exact assembly) ======== -->
       <g id="grip">

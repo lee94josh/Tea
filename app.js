@@ -13,9 +13,9 @@
 
   const $ = (id) => document.getElementById(id);
   const potSwing = $("pot-swing");
-  const stream = $("stream");
+  const stream = $("stream"); // hidden spine: geometry input only
+  const streamBody = $("stream-body"); // the rendered single-contour stream
   const streamSway = $("stream-sway");
-  const droplet = $("droplet");
   const cupCoffee = $("cup-coffee");
   const drips = [$("drip0"), $("drip1"), $("drip2"), $("drip3")];
   const sheet = $("sheet");
@@ -49,16 +49,35 @@
   const STREAM_X = 632;
   const IMPACT_Y = 800;
 
-  /* stream length ↔ height lookup, so the stream can end exactly at any
-     landing height along its curve */
+  /* stream spine lookup: position, unit tangent and normal at arc length,
+     so the stream body can be traced as one contour around the spine and
+     ended exactly at any landing height */
   const streamLen = stream.getTotalLength();
-  stream.setAttribute("stroke-dasharray", streamLen);
-  stream.setAttribute("stroke-dashoffset", streamLen);
   const streamLUT = [];
-  for (let i = 0; i <= 120; i++) {
-    const l = (streamLen * i) / 120;
-    const pt = stream.getPointAtLength(l);
-    streamLUT.push({ l, x: pt.x, y: pt.y });
+  {
+    const K = 120;
+    for (let i = 0; i <= K; i++) {
+      const l = (streamLen * i) / K;
+      const pt = stream.getPointAtLength(l);
+      streamLUT.push({ l, x: pt.x, y: pt.y, tx: 0, ty: 0, nx: 0, ny: 0 });
+    }
+    for (let i = 0; i <= K; i++) {
+      const a = streamLUT[Math.max(0, i - 1)], b = streamLUT[Math.min(K, i + 1)];
+      const dx = b.x - a.x, dy = b.y - a.y, m = Math.hypot(dx, dy) || 1;
+      streamLUT[i].tx = dx / m; streamLUT[i].ty = dy / m;
+      streamLUT[i].nx = -dy / m; streamLUT[i].ny = dx / m;
+    }
+  }
+  function sampleSpine(l) {
+    l = clamp(l, 0, streamLen);
+    const f = (l / streamLen) * (streamLUT.length - 1);
+    const i = Math.min(streamLUT.length - 2, Math.floor(f));
+    const t = f - i, a = streamLUT[i], b = streamLUT[i + 1];
+    return {
+      x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t),
+      tx: lerp(a.tx, b.tx, t), ty: lerp(a.ty, b.ty, t),
+      nx: lerp(a.nx, b.nx, t), ny: lerp(a.ny, b.ny, t),
+    };
   }
   function streamLenAtY(y) {
     if (y >= streamLUT[streamLUT.length - 1].y) return streamLen;
@@ -70,6 +89,66 @@
       }
     }
     return 0;
+  }
+
+  /* One closed contour for the stream: right flank out from the spout,
+     rounded tip cap, left flank back — all from a width profile.
+     While falling, the tip gathers into a droplet head with a neck
+     behind it; once landed, the end flares at contact and the contour
+     closes BELOW the surface, merging into the pool with no seam. */
+  function buildStreamPath(shownLen, tipFree) {
+    if (shownLen < 6) return "";
+    const endLen = tipFree ? shownLen : Math.min(streamLen, shownLen + 10);
+    const right = [], left = [];
+    const N = 24;
+    for (let i = 0; i <= N; i++) {
+      const l = (endLen * i) / N;
+      const s = sampleSpine(l);
+      const u = l / streamLen;
+      // her stroke was 24 wide: taper gently as the fall accelerates
+      let hw = lerp(13.2, 9.6, u) + 1.6 * Math.exp(-l / 30);
+      if (tipFree) {
+        // neck behind the head, then the gathered droplet head itself
+        // (the head grows in as the stream establishes, so the first
+        // instants read as liquid swelling from the beak, not a blob)
+        const headScale = clamp(endLen / 80, 0, 1);
+        hw *= 1 - 0.32 * headScale * Math.exp(-Math.pow((endLen - 46 - l) / 20, 2));
+        hw += 6 * headScale * Math.exp(-Math.pow((endLen - l) / 24, 2));
+      } else {
+        hw *= 1 + 0.28 * Math.exp(-Math.pow((endLen - l) / 30, 2)); // piles at contact
+      }
+      right.push([s.x + s.nx * hw, s.y + s.ny * hw]);
+      left.push([s.x - s.nx * hw, s.y - s.ny * hw]);
+    }
+    // rounded tip cap, traced as part of the same boundary
+    const e = sampleSpine(endLen);
+    const capR = tipFree ? 6 + lerp(13.2, 9.6, endLen / streamLen) * 0.72 : 10;
+    const cap = [];
+    for (const a of [0.45, 0.95, Math.PI / 2, 2.2, 2.7]) {
+      cap.push([
+        e.x + capR * (Math.cos(a) * e.nx + Math.sin(a) * e.tx),
+        e.y + capR * (Math.cos(a) * e.ny + Math.sin(a) * e.ty),
+      ]);
+    }
+    // the spout end closes via the smooth wrap of the closed path itself —
+    // a curved segment, hidden behind the pot's beak
+    const pts = right.concat(cap, left.reverse());
+    return smoothClosedPath(pts);
+  }
+
+  /* Catmull-Rom through samples → one closed path of cubic segments,
+     regenerated from scratch every frame (never morphed). */
+  function smoothClosedPath(pts) {
+    const n = pts.length;
+    if (n < 3) return "";
+    let d = `M${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+      const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      d += ` C${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
+    }
+    return d + " Z";
   }
 
   /* drip dash setup */
@@ -282,18 +361,11 @@
     landing = Math.min(landing, surfaceCore(STREAM_X));
     // falling liquid accelerates: ease-in on the draw
     const draw = easeIn(seg(p, 0.06, 0.14));
-    const shownLen = Math.min(draw * streamLen, streamLenAtY(landing));
-    stream.setAttribute("stroke-dashoffset", streamLen - shownLen);
-
-    /* --- falling droplet head while the stream draws in --- */
-    if (draw > 0.02 && draw < 0.98 && landing > 560) {
-      const tip = stream.getPointAtLength(clamp(shownLen, 0, streamLen));
-      droplet.setAttribute("cx", tip.x.toFixed(1));
-      droplet.setAttribute("cy", (tip.y + 6).toFixed(1));
-      droplet.setAttribute("opacity", (seg(draw, 0.02, 0.12) * (1 - seg(draw, 0.85, 0.98))).toFixed(3));
-    } else {
-      droplet.setAttribute("opacity", 0);
-    }
+    const lenAtLanding = streamLenAtY(landing);
+    const shownLen = Math.min(draw * streamLen, lenAtLanding);
+    // the tip is free (gathered droplet head) until it reaches the surface
+    const tipFree = shownLen < lenAtLanding - 2;
+    streamBody.setAttribute("d", buildStreamPath(shownLen, tipFree));
 
     /* --- splash scales in softly at the landing, rides the surface --- */
     const splashIn = easeOutBack(seg(p, 0.138, 0.172));
