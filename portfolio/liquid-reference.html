@@ -10,7 +10,7 @@
     --ink: #1a1a1a;
     --blue: #3A5FF9;
     --blue-dark: #1731C9;
-    --table: #7C2B18;
+    --liquid: #7C2B18;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -23,7 +23,7 @@
   }
   .stage-wrap { display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .stage { width: min(92%, 900px); transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
-  .stage.zoomed { transform: scale(4); transform-origin: 61% 58%; }
+  .stage.zoomed { transform: scale(4); transform-origin: 60% 52%; }
   svg { display: block; width: 100%; height: auto; }
 
   .panel {
@@ -40,7 +40,7 @@
   .row label { font-size: 12.5px; }
   .row output { font-size: 11.5px; color: #777; text-align: right; font-variant-numeric: tabular-nums; }
   input[type="range"] { width: 100%; accent-color: #7C2B18; }
-  .toggles { display: flex; gap: 14px; margin-bottom: 16px; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 16px; }
   .toggles label { font-size: 12.5px; display: flex; gap: 6px; align-items: center; }
   .note { font-size: 11.5px; color: #999; border-top: 1px solid #eee; padding-top: 12px; }
 </style>
@@ -49,35 +49,34 @@
 
 <div class="stage-wrap">
   <div class="stage" id="stage">
-    <svg id="scene" viewBox="0 0 800 620" aria-label="Reference: single-contour liquid overflow">
+    <svg id="scene" viewBox="0 0 800 700" aria-label="Reference: single-contour liquid overflow">
       <defs>
-        <!-- Faint vertical body: lighter meniscus highlight up top, a hair
-             darker at the base. Fill for ALL liquid. -->
-        <linearGradient id="coffeeGrad" gradientUnits="userSpaceOnUse" x1="0" y1="205" x2="0" y2="575">
-          <stop offset="0"    stop-color="#63321e"/>
-          <stop offset="0.22" stop-color="#4b2a18"/>
-          <stop offset="1"    stop-color="#3a2013"/>
+        <!-- Optional faint body: two stops within ~6% of the flat #7C2B18,
+             so shading never leaves the poster world. Off by default. -->
+        <linearGradient id="coffeeGrad" gradientUnits="userSpaceOnUse" x1="0" y1="300" x2="0" y2="660">
+          <stop offset="0"    stop-color="#87331C"/>
+          <stop offset="1"    stop-color="#6F2511"/>
         </linearGradient>
-        <!-- Goo: a finishing pass only — it softens an outline that is
-             already liquid-shaped. It does not fuse elements, because
-             there is only one element per body of liquid. -->
+        <!-- Goo is a light finishing pass only (the contour is already
+             smooth); toggleable off for inspection. -->
         <filter id="goo" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b"/>
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="b"/>
           <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -8" result="g"/>
           <feComposite in="SourceGraphic" in2="g" operator="atop"/>
         </filter>
       </defs>
 
-      <!-- scene dressing (not liquid: primitives are fine here) -->
-      <rect x="0" y="0" width="800" height="620" fill="#EDE8E8"/>
-      <rect x="0" y="560" width="800" height="60" fill="#7C2B18"/>
-      <ellipse cx="398" cy="562" rx="188" ry="20" fill="#0a0a0a"/>
-      <path d="M250 264 h300 c0 86 -64 152 -143 152 h-14 c-79 0 -143 -66 -143 -152 Z" fill="#3A5FF9"/>
-      <ellipse cx="400" cy="264" rx="152" ry="27" fill="#1731C9"/>
+      <!-- scene dressing, staged like the real composition: the cup is
+           seated ON the table, shadow kissing the bowl -->
+      <rect x="0" y="0" width="800" height="700" fill="#EDE8E8"/>
+      <rect x="0" y="392" width="800" height="308" fill="#7C2B18"/>
+      <ellipse cx="400" cy="474" rx="188" ry="24" fill="#0a0a0a"/>
+      <path d="M250 332 h300 c0 86 -64 152 -143 152 h-14 c-79 0 -143 -66 -143 -152 Z" fill="#3A5FF9"/>
+      <ellipse cx="400" cy="332" rx="152" ry="27" fill="#1731C9"/>
 
-      <!-- ALL liquid lives here: one filtered group, one gradient fill,
-           one traced contour per connected body of coffee. -->
-      <g filter="url(#goo)" fill="url(#coffeeGrad)">
+      <!-- ALL liquid lives here: one filtered group, one fill, one traced
+           contour per connected body of coffee. -->
+      <g id="liquid-group" fill="#7C2B18">
         <path id="liquid-main" d=""/>
         <path id="liquid-drop-0" d=""/>
         <path id="liquid-drop-1" d=""/>
@@ -93,33 +92,35 @@
   <div class="toggles">
     <label><input type="checkbox" id="flow"> flow</label>
     <label><input type="checkbox" id="zoom"> inspect 400%</label>
+    <label><input type="checkbox" id="gooToggle" checked> goo</label>
+    <label><input type="checkbox" id="bodyToggle"> body shading</label>
   </div>
 
   <fieldset>
     <legend>Pool</legend>
     <div class="row"><label>fill level</label><input type="range" id="fill" min="0" max="1" step="0.01" value="0.6"><output for="fill">0.60</output></div>
-    <div class="row"><label>meniscus</label><input type="range" id="bulge" min="0" max="22" step="0.1" value="12"><output for="bulge">12</output></div>
+    <div class="row"><label>meniscus</label><input type="range" id="bulge" min="0" max="28" step="0.1" value="18"><output for="bulge">18</output></div>
   </fieldset>
 
   <fieldset>
     <legend>Drip 1</legend>
     <div class="row"><label>position x</label><input type="range" id="d0x" min="290" max="385" step="1" value="330"><output for="d0x">330</output></div>
-    <div class="row"><label>length</label><input type="range" id="d0len" min="0" max="300" step="1" value="95"><output for="d0len">95</output></div>
+    <div class="row"><label>length</label><input type="range" id="d0len" min="0" max="300" step="1" value="80"><output for="d0len">80</output></div>
   </fieldset>
 
   <fieldset>
     <legend>Drip 2</legend>
     <div class="row"><label>position x</label><input type="range" id="d1x" min="420" max="515" step="1" value="478"><output for="d1x">478</output></div>
-    <div class="row"><label>length</label><input type="range" id="d1len" min="0" max="300" step="1" value="150"><output for="d1len">150</output></div>
+    <div class="row"><label>length</label><input type="range" id="d1len" min="0" max="300" step="1" value="130"><output for="d1len">130</output></div>
   </fieldset>
 
   <fieldset>
     <legend>Liquid weight</legend>
-    <div class="row"><label>neck width</label><input type="range" id="neck" min="10" max="28" step="0.5" value="18"><output for="neck">18</output></div>
-    <div class="row"><label>bead size</label><input type="range" id="bead" min="8" max="24" step="0.5" value="15"><output for="bead">15</output></div>
+    <div class="row"><label>neck width</label><input type="range" id="neck" min="7" max="18" step="0.5" value="11"><output for="neck">11</output></div>
+    <div class="row"><label>bead size</label><input type="range" id="bead" min="8" max="20" step="0.5" value="13"><output for="bead">13</output></div>
   </fieldset>
 
-  <p class="note">Lengthen a drip: it stretches, tapers, grows a pendant bead, necks in above the bead past ~200, and pinches off a falling teardrop past ~240 — all from the outline math. Zoom in: there is no seam to find.</p>
+  <p class="note">Lengthen a drip: it stretches, tapers, gathers into a teardrop tip, necks in past ~200 and pinches off a falling drop past ~240 — all from the outline math. The drop is absorbed where it meets the table. Zoom in: there is no seam to find.</p>
 </aside>
 
 <script>
@@ -130,44 +131,45 @@
    path of cubic segments. Nothing here is an SVG primitive.
    ================================================================ */
 
-const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 // real cubic easing for any motion (never linear)
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 /* Drip half-width profile along its spine, s ∈ [0..1] top→tip.
-   A fillet flares into the lip, the shaft tapers, a pendant bead
-   swells near the tip, and `pinch` necks the middle toward zero.
-   This profile IS the drip — there is no drip shape anywhere else. */
+   A fillet flares into the lip, the shaft tapers, and the bead's
+   maximum is AT the tip so width never decreases after the bead
+   begins — the terminus is a teardrop, never a lollipop.
+   `pinch` necks the middle toward zero. */
 function dripHalfWidth(s, neckHalf, beadR, pinch) {
-  const fillet = neckHalf * 0.9 * Math.exp(-s * 6);
-  const shaft = neckHalf * (0.92 - 0.3 * s);
-  const bead = beadR * Math.exp(-Math.pow((s - 0.9) / 0.16, 2));
+  const fillet = neckHalf * 0.85 * Math.exp(-s * 6);
+  const shaft = neckHalf * (0.95 - 0.38 * s);
+  const bead = beadR * Math.exp(-Math.pow((s - 1) / 0.24, 2)); // max at s = 1
   let w = Math.max(shaft, bead) + fillet;
   const necking = 1 - pinch * Math.exp(-Math.pow((s - 0.45) / 0.2, 2));
-  return Math.max(0.8, w * clamp(necking, 0.02, 1));
+  return Math.max(0.7, w * clamp(necking, 0.02, 1));
 }
 
-/* Walks the single closed boundary of the pooled liquid:
-   meniscus top L→R, rounded outer corner, then the underside R→L —
-   which dips down and around every drip it crosses — and back up
-   the left corner. Returns points for one closed loop. */
+/* Walks the single closed boundary of the pooled liquid.
+   The pool lives IN the cup's mouth: a convex meniscus dome over the
+   rim, ends wrapping DOWN around the rim edge (never protruding
+   sideways), then the underside right→left — which dips down and
+   around every drip it crosses — and back up the left wrap. */
 function poolContour(P) {
   const pts = [];
   const xL = P.cx - P.poolHalf, xR = P.cx + P.poolHalf;
-  const topYc = P.rimY + 2 - P.lift; // pool rides up slightly with fill
-  // the pool sits ON an elliptical rim: both its top and underside curve
-  // down toward the ends (parabolic approximation of the rim's arc)
+  const topYc = P.rimY - P.lift;
+  // the rim is an ellipse: everything the pool does curves down toward
+  // the ends with it (parabolic approximation of the rim's arc)
   const rimDrop = (x) => {
     const u = (x - P.cx) / P.poolHalf;
-    return 11 * u * u;
+    return 13 * u * u;
   };
   const lipAt = (x) => topYc + rimDrop(x) + P.lipDepth;
   // drips drift slightly inward as they run down the curving wall
   const wallDrift = (x, dy) => (x < P.cx ? 1 : -1) * Math.min(8, dy * 0.045);
 
-  // — meniscus: gently convex top over the curved rim, never a flat line —
+  // — meniscus: convex dome over the rim, never a flat line —
   const M = 26;
   for (let i = 0; i <= M; i++) {
     const t = i / M;
@@ -175,27 +177,27 @@ function poolContour(P) {
     pts.push([x, topYc + rimDrop(x) - P.bulge * Math.pow(Math.sin(Math.PI * t), 0.85)]);
   }
 
-  // — right outer corner, rounded —
-  pts.push([xR + 3.5, lerp(topYc + rimDrop(xR), lipAt(xR), 0.5)]);
-  pts.push([xR - 1.5, lipAt(xR - 1.5)]);
+  // — right end: wrap DOWN around the rim edge and tuck inward —
+  pts.push([xR + 3, topYc + rimDrop(xR) + P.lipDepth * 0.45]);
+  pts.push([xR - 1, lipAt(xR - 1)]);
 
   // — underside, right → left; each drip is an excursion of THIS line —
   const drips = P.drips.filter((d) => d.on && d.len > 1).sort((a, b) => b.x - a.x);
-  let cursor = xR - 1.5;
+  let cursor = xR - 1;
   for (const d of drips) {
     const nh = d.neckHalf, cap = dripHalfWidth(1, nh, d.beadR, d.pinch);
     const lipY = lipAt(d.x);
     const enterX = d.x + dripHalfWidth(0, nh, d.beadR, d.pinch);
     // sagging lip segment from the cursor to this drip (curved, not straight)
     const midX = lerp(cursor, enterX, 0.5);
-    pts.push([midX, lipAt(midX) + 2.4]);
-    // down the right flank of the drip, drifting inward with the wall
+    pts.push([midX, lipAt(midX) + 2.2]);
+    // down the right flank, drifting inward with the wall
     const S = 10;
     for (let i = 0; i <= S; i++) {
       const s = i / S, dy = s * d.len;
       pts.push([d.x + wallDrift(d.x, dy) + dripHalfWidth(s, nh, d.beadR, d.pinch), lipY + dy]);
     }
-    // around the tip: a rounded cap traced as part of the same boundary
+    // around the teardrop tip: a rounded cap traced as part of the boundary
     const tipX = d.x + wallDrift(d.x, d.len);
     for (const a of [0.32, 0.75, 1.18, 1.61, 2.04, 2.5, 2.82]) {
       pts.push([tipX + cap * Math.cos(a), lipY + d.len + cap * Math.sin(a)]);
@@ -207,11 +209,11 @@ function poolContour(P) {
     }
     cursor = d.x - dripHalfWidth(0, nh, d.beadR, d.pinch);
   }
-  // remaining lip to the left corner, sagging gently
+  // remaining lip to the left wrap
   const midX2 = lerp(cursor, xL, 0.45);
-  pts.push([midX2, lipAt(midX2) + 2.4]);
-  pts.push([xL + 1.5, lipAt(xL + 1.5)]);
-  pts.push([xL - 3.5, lerp(topYc + rimDrop(xL), lipAt(xL), 0.5)]);
+  pts.push([midX2, lipAt(midX2) + 2.2]);
+  pts.push([xL + 1, lipAt(xL + 1)]);
+  pts.push([xL - 3, topYc + rimDrop(xL) + P.lipDepth * 0.45]);
   return pts;
 }
 
@@ -219,17 +221,17 @@ function poolContour(P) {
    profile — rounded bottom, tapered (but soft) top. Never a circle. */
 function dropContour(x, yTop, r) {
   const pts = [];
-  const h = r * 2.6; // tip-to-bottom-center distance
+  const h = r * 2.6;
   const side = (u) => r * Math.pow(Math.sin(Math.PI / 2 * clamp(u * 1.08, 0, 1)), 0.85);
   const N = 7;
-  for (let i = 0; i <= N; i++) { // right side, tapering out from the tip
+  for (let i = 0; i <= N; i++) {
     const u = i / N;
     pts.push([x + side(u), yTop + u * h]);
   }
-  for (const a of [0.45, 0.95, Math.PI / 2, 2.2, 2.7]) { // rounded bottom
+  for (const a of [0.45, 0.95, Math.PI / 2, 2.2, 2.7]) {
     pts.push([x + r * Math.cos(a), yTop + h + r * 0.55 * Math.sin(a)]);
   }
-  for (let i = N; i >= 1; i--) { // left side back up to the tip
+  for (let i = N; i >= 1; i--) {
     const u = i / N;
     pts.push([x - side(u), yTop + u * h]);
   }
@@ -258,9 +260,10 @@ function smoothClosedPath(pts) {
 /* ================================================================
    SECTION 3 — drip state model
    One slider ("length") drives the whole life of a drip:
-     0..PINCH_AT      growing shaft with bead
-     PINCH_AT..DETACH necking above the bead
-     DETACH..MAX      remnant retracts; a teardrop falls away
+     0..PINCH_AT      growing shaft gathering into a teardrop tip
+     PINCH_AT..DETACH necking above the tip
+     DETACH..MAX      remnant retracts; a teardrop falls, and is
+                      absorbed where it meets the table
    ================================================================ */
 const PINCH_AT = 200, DETACH_AT = 240;
 function dripState(x, len, neckHalf, beadR) {
@@ -274,7 +277,7 @@ function dripState(x, len, neckHalf, beadR) {
   const over = len - DETACH_AT;
   return {
     attached: { on: true, x, len: Math.max(24, DETACH_AT * 0.42 - over * 0.1), neckHalf, beadR: beadR * 0.5, pinch: 0.35 },
-    drop: { x, fall: over * 2.6, r: beadR * 1.15 },
+    drop: { x, fall: over * 2.2, r: beadR * 1.15 },
   };
 }
 
@@ -282,37 +285,47 @@ function dripState(x, len, neckHalf, beadR) {
    SECTION 4 — scene rendering + UI
    ================================================================ */
 const $ = (id) => document.getElementById(id);
+const liquidGroup = $("liquid-group");
 const mainPath = $("liquid-main");
 const dropPaths = [$("liquid-drop-0"), $("liquid-drop-1")];
 
-const RIM = { cx: 400, y: 264, half: 152 };
+const RIM = { cx: 400, y: 332, half: 152 };
+const TABLE_ABSORB_Y = 505; // drops are absorbed as they cross onto the table
 
 function render(v) {
   const drips = [];
   const states = [
-    dripState(v.d0x, v.d0len, v.neck / 2, v.bead),
-    dripState(v.d1x, v.d1len, v.neck / 2, v.bead),
+    dripState(v.d0x, v.d0len, v.neck / 2, v.bead),           // drip 1
+    dripState(v.d1x, v.d1len, (v.neck / 2) * 1.25, v.bead * 1.15), // drip 2: nature staggers
   ];
   states.forEach((s) => drips.push(s.attached));
 
   const P = {
     cx: RIM.cx,
     rimY: RIM.y,
-    poolHalf: RIM.half + 4,
-    lift: 8 * v.fill,
-    lipDepth: 9 + 6 * v.fill,
+    poolHalf: RIM.half - 2, // inside the rim — the pool never protrudes sideways
+    lift: 3 + 7 * v.fill,
+    lipDepth: 10 + 6 * v.fill,
     bulge: v.bulge * (0.45 + 0.55 * v.fill),
     drips,
   };
   mainPath.setAttribute("d", smoothClosedPath(poolContour(P)));
 
-  const lipY = RIM.y + 2 - P.lift + P.lipDepth;
+  const lipY = RIM.y - P.lift + P.lipDepth;
   states.forEach((s, i) => {
     if (s.drop) {
-      const yTop = lipY + s.attached.len + 22 + s.drop.fall;
-      dropPaths[i].setAttribute("d", smoothClosedPath(dropContour(s.drop.x, yTop, s.drop.r)));
+      const yTop = lipY + s.attached.len + 20 + s.drop.fall;
+      // absorbed where it meets the table: fade over the last stretch
+      const fade = 1 - clamp((yTop + s.drop.r * 2.6 - TABLE_ABSORB_Y) / 40, 0, 1);
+      if (fade > 0.01) {
+        dropPaths[i].setAttribute("d", smoothClosedPath(dropContour(s.drop.x, yTop, s.drop.r)));
+        dropPaths[i].setAttribute("opacity", fade.toFixed(3));
+      } else {
+        dropPaths[i].setAttribute("d", "");
+      }
     } else {
       dropPaths[i].setAttribute("d", "");
+      dropPaths[i].setAttribute("opacity", 1);
     }
   });
 }
@@ -332,6 +345,15 @@ function syncOutputs() {
   });
 }
 ids.forEach((id) => $(id).addEventListener("input", () => { syncOutputs(); render(readValues()); }));
+
+// ---- finishing-pass toggles ----
+$("gooToggle").addEventListener("change", (e) => {
+  liquidGroup.setAttribute("filter", e.target.checked ? "url(#goo)" : "");
+});
+liquidGroup.setAttribute("filter", "url(#goo)");
+$("bodyToggle").addEventListener("change", (e) => {
+  liquidGroup.setAttribute("fill", e.target.checked ? "url(#coffeeGrad)" : "#7C2B18");
+});
 
 // ---- inspect zoom ----
 $("zoom").addEventListener("change", (e) => $("stage").classList.toggle("zoomed", e.target.checked));
