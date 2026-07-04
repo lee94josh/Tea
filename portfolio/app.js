@@ -306,18 +306,18 @@
   }
   /* ---- the two curtains: one surface, rendered twice ----
      BACK: the pool body behind all objects — the horizon silhouette.
-     FRONT: same surface, its top edge displaced DOWN at each foreground
-     object's column to that object's own floor-based waterline, so
-     objects submerge bottom-up from their own bases while the horizon
-     passes behind them. Dips shrink to zero as the pool deepens, and
-     the two curtains converge into the uniform flood. */
+     FRONT: the pool's LEADING EDGE. It starts at the front floor plane —
+     below the shadows, below every object's base — and climbs with local
+     depth, so the film first erases the shadows, then creeps up each
+     object from its own base the moment it reaches that base's height,
+     and finally converges onto the horizon surface (deficit ≈ 187) so
+     the two curtains become one before the flood. */
   const WATERLINE_K = 1.8; // waterline climb per unit of local pool depth
-  let CUP_DIP = 0, FRUIT_DIP = 0, FRUIT_X = PERSIMMON.cx;
+  const FRONT_Y = 1045; // the front floor plane: where the leading edge is born
   function frontTopAt(x) {
-    let y = surfaceAt(x);
-    if (CUP_DIP > 0.1) y += CUP_DIP * Math.exp(-Math.pow((x - CUP.cx) / 235, 2));
-    if (FRUIT_DIP > 0.1) y += FRUIT_DIP * Math.exp(-Math.pow((x - FRUIT_X) / 165, 2));
-    return y;
+    // max = the lower line on screen: the front lags the horizon until
+    // it catches up, then they are the same surface
+    return Math.max(surfaceAt(x), FRONT_Y - WATERLINE_K * (moundAt(x) + R));
   }
   function buildCurtain(topFn) {
     if (H < 0.5 && R < 0.5) return "";
@@ -430,14 +430,14 @@
        never higher, so it can't levitate above the liquid. --- */
     const drift = 40 * easeInOut(seg(p, 0.58, 0.76));
     FB_X = PERSIMMON.cx + drift;
-    FRUIT_X = FB_X;
     FB_A = 0; // fruit displacement is set after buoyancy below
     const fruitDeficit = moundAt(PERSIMMON.cx) + R;
-    // the waterline on the fruit: climbs from its base with local pool
-    // depth, bobbing gently with the flood's wave
+    // the fruit rides the same front waterline as everything else: born
+    // at the floor plane, it reaches the fruit's base, creeps up it, and
+    // only then displaces enough to lift it
     const fruitWater =
-      PERSIMMON.base - WATERLINE_K * fruitDeficit + AMP * 0.6 * Math.sin(FB_X * 0.02 + PHASE);
-    const waterAtFruit = Math.max(fruitWater, surfaceCore(FRUIT_X));
+      FRONT_Y - WATERLINE_K * fruitDeficit + AMP * 0.6 * Math.sin(FB_X * 0.02 + PHASE);
+    const waterAtFruit = Math.max(fruitWater, surfaceCore(FB_X));
     const draft = 100 + 460 * easeInOut(seg(p, 0.7, 0.8));
     const ty = Math.min(0, waterAtFruit + draft - PERSIMMON.base);
     const slope = (surfaceCore(FB_X + 40) - surfaceCore(FB_X - 40)) / 80;
@@ -446,23 +446,22 @@
       "transform",
       `translate(${drift.toFixed(1)} ${ty.toFixed(1)}) rotate(${rot.toFixed(2)} ${PERSIMMON.cx} 878)`
     );
+    // the shadow dims gradually as the film spreads over it — driven by
+    // the LOCAL pool depth, in step with the leading edge covering it
     persimmonShadow.setAttribute(
       "opacity",
-      Math.min(clamp(1 + ty / 28, 0, 1), 1 - seg(fruitDeficit, 0.3, 2)).toFixed(3)
+      Math.min(clamp(1 + ty / 28, 0, 1), 1 - seg(fruitDeficit, 6, 45)).toFixed(3)
     );
     // the floating fruit lifts the surface around itself
     FB_A = clamp(-ty * 0.15, 0, 13) * (1 - seg(p, 0.72, 0.8));
 
     /* --- the two curtains --- */
     const cupDeficit = moundAt(CUP.cx) + R;
-    const cupWater = 997 - WATERLINE_K * cupDeficit;
-    CUP_DIP = Math.max(0, cupWater - surfaceCore(CUP.cx));
-    FRUIT_DIP = Math.max(0, fruitWater - surfaceCore(FRUIT_X));
     liquidBack.setAttribute("d", buildCurtain(surfaceAt));
     const frontD = buildCurtain(frontTopAt);
     liquid.setAttribute("d", frontD);
     liquidClip.setAttribute("d", frontD);
-    cupShadow.setAttribute("opacity", (1 - seg(moundP, 0.4, 0.75)).toFixed(3));
+    cupShadow.setAttribute("opacity", (1 - seg(cupDeficit, 6, 45)).toFixed(3));
 
     /* --- the stream always ends ON the landing surface --- */
     let landing = IMPACT_Y + 2;
