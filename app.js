@@ -176,7 +176,16 @@
 
   /* Catmull-Rom through samples → one closed path of cubic segments,
      regenerated from scratch every frame (never morphed). */
-  function smoothClosedPath(pts) {
+  function smoothClosedPath(raw) {
+    // drop near-duplicate consecutive points (incl. last vs first) — a
+    // repeated vertex gives Catmull-Rom a zero-length segment whose control
+    // points overshoot into a hairline cusp
+    const pts = [];
+    for (const p of raw) {
+      const q = pts[pts.length - 1];
+      if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) >= 0.3) pts.push(p);
+    }
+    while (pts.length > 1 && Math.hypot(pts[pts.length - 1][0] - pts[0][0], pts[pts.length - 1][1] - pts[0][1]) < 0.3) pts.pop();
     const n = pts.length;
     if (n < 3) return "";
     let d = `M${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
@@ -200,12 +209,17 @@
   ];
 
   /* drip half-width profile along its spine, s ∈ [0..1] top→tip: fillet
-     into the cap, tapering shaft, bead max AT the tip (teardrop terminus) */
+     into the cap, tapering shaft, bead max AT the tip (teardrop terminus).
+     The bead's sigma widens for young drips so a nascent drip is ONE convex
+     lobe — the distinct tip bead only forms once the run is established —
+     and shaft/bead blend through a smooth max so the waist never creases. */
   function dripHalfWidth(s, neckHalf, beadR, wScale) {
-    const fillet = neckHalf * 0.85 * Math.exp(-s * 6);
-    const shaft = neckHalf * (0.95 - 0.35 * s);
-    const bead = beadR * Math.exp(-Math.pow((s - 1) / 0.34, 2));
-    return (Math.max(shaft, bead) + fillet) * wScale;
+    const fillet = neckHalf * 0.9 * Math.exp(-s * 2.6);
+    const shaft = neckHalf * (0.92 - 0.22 * s);
+    const sig = 0.34 + 0.4 * (1 - wScale);
+    const bead = beadR * Math.exp(-Math.pow((s - 1) / sig, 2));
+    const body = Math.pow(Math.pow(shaft, 4) + Math.pow(bead, 4), 0.25);
+    return (body + fillet) * wScale;
   }
 
   /* ONE closed contour for all liquid on the cup: elliptical dome top,
@@ -222,12 +236,14 @@
       const th = Math.PI - (Math.PI * i) / T;
       pts.push([cx + rx * Math.cos(th), cy - ryT * Math.sin(th)]);
     }
-    // — underside arc, right → left, with drip excursions —
+    // — underside arc, right → left, with drip excursions; the corner
+    // vertices (cx±rx, cy) belong to the top arc alone, so the walk runs
+    // 1…T−1 — a doubled corner point cusps under Catmull-Rom —
     const active = dripList
-      .filter((d) => d.len > 2)
+      .filter((d) => d.len > 5)
       .sort((a, b) => b.x - a.x);
     let di = 0;
-    for (let i = 0; i <= T; i++) {
+    for (let i = 1; i <= T - 1; i++) {
       const th = (Math.PI * i) / T;
       const x = cx + rx * Math.cos(th);
       const y = cy + ryB * Math.sin(th);
