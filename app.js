@@ -17,8 +17,6 @@
   const streamBody = $("stream-body"); // the rendered single-contour stream
   const streamSway = $("stream-sway");
   const cupCoffee = $("cup-coffee");
-  const drips = [$("drip0"), $("drip1"), $("drip2"), $("drip3")];
-  const sheet = $("sheet");
   const liquid = $("liquid");
   const liquidClip = $("liquid-clip-path");
   const persimmon = $("persimmon");
@@ -182,34 +180,83 @@
     return d + " Z";
   }
 
-  /* drip dash setup */
-  const dripLens = drips.map((d) => d.getTotalLength());
-  drips.forEach((d, i) => {
-    d.setAttribute("stroke-dasharray", dripLens[i]);
-    d.setAttribute("stroke-dashoffset", dripLens[i]);
-  });
-  const dripWindows = [ [0.325, 0.43], [0.35, 0.44], [0.335, 0.45], [0.31, 0.415] ];
+  /* the cup's drips: fixed positions and personalities; length is driven
+     per frame and capped at the pool surface (they feed it, then submerge
+     as it rises past them) */
+  const DRIPS = [
+    { x: 505, neckHalf: 9, beadR: 12.5, s0: 0.335 },
+    { x: 566, neckHalf: 6.5, beadR: 9, s0: 0.375 },
+    { x: 700, neckHalf: 7.5, beadR: 10.5, s0: 0.355 },
+    { x: 766, neckHalf: 10, beadR: 13.5, s0: 0.32 },
+  ];
 
-  /* falling droplets pinching off the skirt lobes: [x, y0, y1, start, end] */
-  const dropSpecs = [ [585, 902, 956, 0.425, 0.478], [700, 920, 958, 0.452, 0.505] ];
-
-  /* bowl half-width at height y (straight rim corners rounding into a
-     177.54-radius bottom, from the exported cup path) */
-  function bowlHW(y) {
-    const dy = y - CUP.top;
-    if (dy <= 0) return 187;
-    if (dy >= CUP.r) return 12;
-    return 9.455 + Math.sqrt(Math.max(0, CUP.r * CUP.r - dy * dy));
+  /* drip half-width profile along its spine, s ∈ [0..1] top→tip: fillet
+     into the cap, tapering shaft, bead max AT the tip (teardrop terminus) */
+  function dripHalfWidth(s, neckHalf, beadR, wScale) {
+    const fillet = neckHalf * 0.85 * Math.exp(-s * 6);
+    const shaft = neckHalf * (0.95 - 0.35 * s);
+    const bead = beadR * Math.exp(-Math.pow((s - 1) / 0.26, 2));
+    return (Math.max(shaft, bead) + fillet) * wScale;
   }
 
-  /* the meniscus/dome lens: bottom arc hugs the rim, top arc bulges */
-  function lensPath(cx, cy, rx, ryB, ryT) {
-    if (rx <= 1) return "";
-    return (
-      `M${(cx - rx).toFixed(1)} ${cy.toFixed(1)}` +
-      ` A${rx.toFixed(1)} ${ryB.toFixed(1)} 0 0 0 ${(cx + rx).toFixed(1)} ${cy.toFixed(1)}` +
-      ` A${rx.toFixed(1)} ${ryT.toFixed(1)} 0 0 0 ${(cx - rx).toFixed(1)} ${cy.toFixed(1)} Z`
-    );
+  /* ONE closed contour for all liquid on the cup: elliptical dome top,
+     rim-wrap corners, and an underside arc whose walk dives down and
+     around every drip it crosses. Pre-overflow (wrapP 0, no drips) this
+     degenerates to the plain fill lens — one shape through the whole life. */
+  function cupCapContour(cy, rx, ryB, ryT, wrapP, dripList) {
+    if (rx <= 2) return "";
+    const cx = CUP.cx;
+    const pts = [];
+    const T = 20;
+    // — top arc, left → right —
+    for (let i = 0; i <= T; i++) {
+      const th = Math.PI - (Math.PI * i) / T;
+      pts.push([cx + rx * Math.cos(th), cy - ryT * Math.sin(th)]);
+    }
+    // — right rim-wrap corner: curls down and tucks in —
+    if (wrapP > 0.01) {
+      pts.push([cx + rx + 4 * wrapP, cy + 9 * wrapP]);
+    }
+    // — underside arc, right → left, with drip excursions —
+    const active = dripList
+      .filter((d) => d.len > 2)
+      .sort((a, b) => b.x - a.x);
+    let di = 0;
+    for (let i = 0; i <= T; i++) {
+      const th = (Math.PI * i) / T;
+      const x = cx + rx * Math.cos(th);
+      const y = cy + ryB * Math.sin(th);
+      // dive around any drip we just crossed
+      while (di < active.length && active[di].x >= x) {
+        const d = active[di++];
+        // drips EMERGE: width scales in with establishment, so a nascent
+        // drip is a tiny swelling of the edge, never a detached dot
+        const wScale = Math.pow(clamp(d.len / 30, 0, 1), 0.7);
+        const lipY = cy + ryB * Math.sqrt(Math.max(0, 1 - Math.pow((d.x - cx) / rx, 2)));
+        const S = 9;
+        const driftDir = d.x < cx ? 1 : -1;
+        const drift = (dy) => driftDir * Math.min(9, dy * 0.05);
+        for (let k = 0; k <= S; k++) {
+          const s = k / S, dy = s * d.len;
+          pts.push([d.x + drift(dy) + dripHalfWidth(s, d.neckHalf, d.beadR, wScale), lipY + dy]);
+        }
+        const cap = dripHalfWidth(1, d.neckHalf, d.beadR, wScale);
+        const tipX = d.x + drift(d.len);
+        for (const a of [0.32, 0.9, Math.PI / 2, 2.24, 2.82]) {
+          pts.push([tipX + cap * Math.cos(a), lipY + d.len + cap * Math.sin(a)]);
+        }
+        for (let k = S; k >= 0; k--) {
+          const s = k / S, dy = s * d.len;
+          pts.push([d.x + drift(dy) - dripHalfWidth(s, d.neckHalf, d.beadR, wScale), lipY + dy]);
+        }
+      }
+      pts.push([x, y]);
+    }
+    // — left rim-wrap corner —
+    if (wrapP > 0.01) {
+      pts.push([cx - rx - 4 * wrapP, cy + 9 * wrapP]);
+    }
+    return smoothClosedPath(pts);
   }
 
   /* ---------- the unified liquid surface ---------- */
@@ -303,48 +350,37 @@
     // (the stream follows the pot via the spine warp in buildStreamPath —
     // no skew trick needed)
 
-    /* --- cup fill → meniscus → overflow dome, as one lens --- */
+    /* --- all liquid on the cup, as ONE contour: fill lens → meniscus →
+       rim wrap, with drips growing as excursions of the same boundary --- */
     const level = easeInOut(seg(p, 0.145, 0.3));
-    const bulge = easeInOut(seg(p, 0.3, 0.35));
-    const domeP = easeInOut(seg(p, 0.36, 0.52));
+    const bulge = easeInOut(seg(p, 0.3, 0.36));
+    const wrapP = easeInOut(seg(p, 0.33, 0.41));
     let cy = lerp(lerp(839, CUP.rimY, level), 823.5, bulge);
-    let rx = level <= 0 ? 0 : lerp(lerp(92, CUP.rimRx, level), 192, bulge);
-    let ryT = lerp(lerp(17, CUP.rimRy, level), 48, bulge);
-    let ryB = lerp(lerp(17, CUP.rimRy, level), 42, bulge);
-    rx = lerp(rx, 196.5, domeP);
-    ryT = lerp(ryT, 62, domeP);
-    ryB = lerp(ryB, 44.5, domeP);
-    cupCoffee.setAttribute("d", lensPath(CUP.cx, cy, rx, ryB, ryT));
+    let rx = level <= 0 ? 0 : lerp(lerp(92, CUP.rimRx, level), 176, bulge);
+    let ryT = lerp(lerp(17, CUP.rimRy, level), 42, bulge);
+    let ryB = lerp(lerp(17, CUP.rimRy, level), 40, bulge);
+    rx = lerp(rx, 192, wrapP);
+    ryT = lerp(ryT, 55, wrapP);
+    ryB = lerp(ryB, 46, wrapP);
+    const dripList = DRIPS.map((d) => {
+      const lipY = cy + ryB * Math.sqrt(Math.max(0, 1 - Math.pow((d.x - CUP.cx) / Math.max(rx, 1), 2)));
+      const maxLen = 985 - lipY; // runs the bowl's face down to its base
+      return {
+        x: d.x, neckHalf: d.neckHalf, beadR: d.beadR,
+        len: maxLen * easeIn(seg(p, d.s0, d.s0 + 0.17)) * wrapP,
+      };
+    });
+    cupCoffee.setAttribute("d", cupCapContour(cy, rx, ryB, ryT, wrapP, dripList));
     const domeApex = cy - ryT;
 
-    /* --- drips run down the bowl, accelerating like falling liquid --- */
-    drips.forEach((d, i) => {
-      const dp = easeIn(seg(p, dripWindows[i][0], dripWindows[i][1]));
-      d.setAttribute("stroke-dashoffset", dripLens[i] * (1 - dp));
-    });
-
-    /* --- glaze skirt slides down over the cup --- */
-    sheet.setAttribute("d", buildSkirtPath(domeP));
-
-    /* --- droplets pinch off the skirt lobes and fall --- */
-    fallDrops.forEach((el, i) => {
-      const [x, y0, y1, s0, s1] = dropSpecs[i];
-      const dp = seg(p, s0, s1);
-      if (dp > 0 && dp < 1) {
-        el.setAttribute("cx", x);
-        el.setAttribute("cy", lerp(y0, y1, easeIn(dp)).toFixed(1));
-        el.setAttribute("opacity", (seg(dp, 0, 0.15) * (1 - seg(dp, 0.85, 1))).toFixed(3));
-      } else {
-        el.setAttribute("opacity", 0);
-      }
-    });
-
-    /* --- unified liquid: mound spreads, then the flood takes the frame --- */
-    const moundP = easeInOut(seg(p, 0.42, 0.66));
+    /* --- the pool: fed by the drips, it rises FROM THE TABLE — a wide,
+       low puddle around the base that climbs the bowl and submerges the
+       cup bottom-up, then hands off to the flood --- */
+    const moundP = easeInOut(seg(p, 0.44, 0.68));
     const floodP = easeInOut(seg(p, 0.6, 0.94));
     R = floodP * 1140;
-    H = moundP * 192 * (1 - 0.85 * seg(R, 0, 500));
-    W = lerp(240, 570, moundP);
+    H = moundP * 230 * (1 - 0.85 * seg(R, 0, 500));
+    W = lerp(430, 640, moundP);
     AMP = 12 * seg(R, 20, 180) * (1 - 0.35 * seg(R, 760, 1140));
     PHASE = 2 + p * 5;
 

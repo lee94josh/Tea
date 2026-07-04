@@ -44,12 +44,6 @@
         <clipPath id="liquid-clip">
           <path id="liquid-clip-path" d=""/>
         </clipPath>
-        <!-- the glaze skirt can never escape the bowl silhouette (plus a
-             window below the cup for its hanging drip-lobes) -->
-        <clipPath id="bowl-clip">
-          <path d="M448.99,819.58h373.99c0,97.98-79.55,177.54-177.54,177.54h-18.91c-97.98,0-177.54-79.55-177.54-177.54h0Z" transform="translate(635.72 908.37) scale(1.045) translate(-635.72 -908.37)"/>
-          <rect x="520" y="946" width="232" height="110"/>
-        </clipPath>
       </defs>
 
       <!-- background + table -->
@@ -79,25 +73,10 @@
       </g>
       <path class="cls-8" d="M448.99,819.58h373.99c0,97.98-79.55,177.54-177.54,177.54h-18.91c-97.98,0-177.54-79.55-177.54-177.54h0Z"/>
       <path class="cls-10" d="M635.72,867.7c-47.96,0-93.14-3.58-127.22-10.09-40.96-7.82-60.04-18.54-60.04-33.75s19.08-25.93,60.04-33.75c34.08-6.51,79.26-10.09,127.22-10.09s93.14,3.58,127.22,10.09c40.96,7.82,60.04,18.55,60.04,33.75s-19.08,25.93-60.04,33.75c-34.08,6.51-79.26,10.09-127.22,10.09Z"/>
-      <!-- coffee surface in the cup: a lens whose bottom arc follows the rim
-           and whose top arc rises from flat fill to the overflow dome -->
+      <!-- ALL liquid on the cup — fill lens, meniscus, rim wrap, and every
+           drip running down the bowl — is ONE closed contour, regenerated
+           each frame. Drips are downward excursions of this boundary. -->
       <path id="cup-coffee" class="cls-12" d=""/>
-
-      <!-- drips running down the bowl as it overflows (dash-drawn) -->
-      <g id="drips" fill="none" stroke="#7c2b18" stroke-linecap="round">
-        <path id="drip0" d="M505 824 L505 956" stroke-width="20"/>
-        <path id="drip1" d="M566 824 L566 908" stroke-width="16"/>
-        <path id="drip2" d="M702 824 L702 936" stroke-width="17"/>
-        <path id="drip3" d="M768 822 L768 976" stroke-width="21"/>
-      </g>
-      <!-- glaze skirt sliding down the cup (geometry generated per frame);
-           the dome above it is the meniscus lens itself, grown -->
-      <path id="sheet" fill="#7c2b18" d="" clip-path="url(#bowl-clip)"/>
-      <!-- droplets pinching off the skirt lobes -->
-      <g id="fall-drops" fill="#7c2b18">
-        <ellipse id="fall-drop0" rx="8" ry="11" opacity="0"/>
-        <ellipse id="fall-drop1" rx="7" ry="10" opacity="0"/>
-      </g>
 
       <!-- ======== coffee stream: ONE traced contour (spine + width profile),
            regenerated every frame. The spine path is geometry input only —
