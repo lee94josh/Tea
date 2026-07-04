@@ -105,10 +105,12 @@
     const headScale = clamp(endLen / 80, 0, 1);
 
     // spine frame at arc length l, rotated about the ring by the pot's
-    // tilt, with influence fading downstream so the landing stays put
+    // tilt. The first 80px rotate RIGIDLY with the pot — the whole
+    // beak-cover region stays congruent to its rest pose under any
+    // rotation — then influence fades downstream so the landing stays put
     function frameAt(l) {
       const s = sampleSpine(l);
-      const a = tiltRad * Math.exp(-l / 90);
+      const a = tiltRad * (l <= 80 ? 1 : Math.exp(-(l - 80) / 130));
       if (Math.abs(a) < 1e-4) return s;
       const c = Math.cos(a), sn = Math.sin(a);
       const dx = s.x - RING.cx, dy = s.y - RING.cy;
