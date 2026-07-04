@@ -29,6 +29,16 @@
   const fallDrops = [$("fall-drop0"), $("fall-drop1")];
   const workTease = $("work-tease");
 
+  // fail soft if the markup and script versions ever mismatch (e.g. a
+  // stale cached HTML): show the static scene instead of a dead page
+  const required = [track, hint, potSwing, stream, streamBody, cupCoffee, liquid,
+    liquidClip, persimmon, persimmonShadow, persimmonDipRect, splash, cupShadow,
+    cupHandle, workTease].concat(ripples);
+  if (required.some((el) => !el)) {
+    console.warn("hero: markup/script version mismatch — animation disabled");
+    return;
+  }
+
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
