@@ -26,13 +26,12 @@
   const cupShadow = $("cup-shadow");
   const ripples = [$("ripple0"), $("ripple1")];
   const fallDrops = [$("fall-drop0"), $("fall-drop1")];
-  const workTease = $("work-tease");
 
   // fail soft if the markup and script versions ever mismatch (e.g. a
   // stale cached HTML): show the static scene instead of a dead page
   const required = [track, hint, potSwing, stream, streamBody, cupCoffee, liquid,
-    liquidBack, liquidClip, persimmon, persimmonShadow, splash, cupShadow,
-    workTease].concat(ripples);
+    liquidBack, liquidClip, persimmon, persimmonShadow, splash, cupShadow]
+    .concat(ripples);
   if (required.some((el) => !el)) {
     console.warn("hero: markup/script version mismatch — animation disabled");
     return;
@@ -494,12 +493,8 @@
       el.setAttribute("opacity", (ripActive * (1 - ph) * seg(ph, 0, 0.08) * 0.85).toFixed(3));
     });
 
-    /* --- the release: SELECTED WORK rises out of the liquid as the flood
-       takes over the screen, so the payoff is already climbing by the time
-       the coffee fills the frame (no dead flat-brown stretch) --- */
-    const tp = seg(p, 0.78, 0.93);
-    workTease.setAttribute("opacity", seg(p, 0.78, 0.87).toFixed(3));
-    workTease.setAttribute("transform", `translate(0 ${lerp(56, 0, easeOut(tp)).toFixed(1)})`);
+    /* --- the release: the real portfolio section (see .work in the CSS)
+       rides the scroll up out of the flood — no in-SVG tease needed --- */
 
     /* --- scroll hint --- */
     hint.style.opacity = 1 - seg(p, 0.0, 0.05);
