@@ -243,6 +243,8 @@
       .filter((d) => d.len > 5)
       .sort((a, b) => b.x - a.x);
     let di = 0;
+    let barrier = pts.length; // don't pop past the top arc or a prior drip
+    let clearX = Infinity; // skip arc samples inside the last drip's footprint
     for (let i = 1; i <= T - 1; i++) {
       const th = (Math.PI * i) / T;
       const x = cx + rx * Math.cos(th);
@@ -254,6 +256,11 @@
         // drip is a tiny swelling of the edge, never a detached dot
         const wScale = Math.pow(clamp(d.len / 30, 0, 1), 0.7);
         const lipY = cy + ryB * Math.sqrt(Math.max(0, 1 - Math.pow((d.x - cx) / rx, 2)));
+        const w0 = dripHalfWidth(0, d.neckHalf, d.beadR, wScale);
+        // the flare must OWN its footprint on the lip: any arc sample left
+        // inside it makes the boundary double back, and that reversed
+        // micro-loop cancels the fill winding — a torn seam at the junction
+        while (pts.length > barrier && pts[pts.length - 1][0] < d.x + w0 + 2) pts.pop();
         const S = 9;
         const driftDir = d.x < cx ? 1 : -1;
         const drift = (dy) => driftDir * Math.min(9, dy * 0.05);
@@ -270,7 +277,10 @@
           const s = k / S, dy = s * d.len;
           pts.push([d.x + drift(dy) - dripHalfWidth(s, d.neckHalf, d.beadR, wScale), lipY + dy]);
         }
+        barrier = pts.length;
+        clearX = d.x - w0 - 2;
       }
+      if (x > clearX) continue;
       pts.push([x, y]);
     }
     return smoothClosedPath(pts);
@@ -414,9 +424,10 @@
     /* --- persimmon: in FRONT of the pool. Its own waterline starts at
        its base and climbs as the local pool deepens — the fruit floats
        when it has displaced enough, drifts down-current, and is swamped
-       when the flood outruns its draft. Submersion is a silhouette-
-       clipped mask rising from the base, so coverage always comes from
-       BELOW, never from the table-horizon line. --- */
+       when its growing draft outruns the surface. It rides whichever
+       water level is REAL at its column: the amplified waterline while
+       the pool approaches, the actual surface after the crossover —
+       never higher, so it can't levitate above the liquid. --- */
     const drift = 40 * easeInOut(seg(p, 0.58, 0.76));
     FB_X = PERSIMMON.cx + drift;
     FRUIT_X = FB_X;
@@ -426,8 +437,9 @@
     // depth, bobbing gently with the flood's wave
     const fruitWater =
       PERSIMMON.base - WATERLINE_K * fruitDeficit + AMP * 0.6 * Math.sin(FB_X * 0.02 + PHASE);
+    const waterAtFruit = Math.max(fruitWater, surfaceCore(FRUIT_X));
     const draft = 100 + 460 * easeInOut(seg(p, 0.7, 0.8));
-    const ty = Math.min(0, fruitWater + draft - PERSIMMON.base);
+    const ty = Math.min(0, waterAtFruit + draft - PERSIMMON.base);
     const slope = (surfaceCore(FB_X + 40) - surfaceCore(FB_X - 40)) / 80;
     const rot = clamp(-slope * 55, -7, 7) * clamp(-ty / 40, 0, 1);
     persimmon.setAttribute(
