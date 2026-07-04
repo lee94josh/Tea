@@ -1,0 +1,221 @@
+:root {
+  /* palette lifted from Haley's vector export */
+  --paper: #EDE8E8;
+  --ink: #000000;
+  --flood: #7C2B18;
+  --coffee: #7C2B18;
+  --blue: #3A5FF9;
+  --blue-dark: #1731C9;
+  --orange: #FF931E;
+  --green: #39B54A;
+  --pink: #C48780;
+  --nail: #E50026;
+}
+
+@font-face {
+  font-family: "Anton";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/anton-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Oswald";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/oswald-latin.woff2") format("woff2");
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--flood);
+  color: var(--paper);
+  font-family: "Oswald", "Arial Narrow", sans-serif;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ============ hero ============ */
+
+.hero-track {
+  height: 560vh;
+  background: var(--paper);
+}
+
+.hero-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.t-name {
+  font-family: "Anton", "Arial Narrow", Impact, sans-serif;
+  font-size: 148px;
+  letter-spacing: 2px;
+}
+.t-sub {
+  font-family: "Anton", "Arial Narrow", Impact, sans-serif;
+  font-size: 45px;
+  letter-spacing: 2px;
+}
+.t-work {
+  font-family: "Anton", "Arial Narrow", Impact, sans-serif;
+  font-size: 44px;
+  letter-spacing: 2px;
+}
+.t-tease {
+  font-family: "Oswald", "Arial Narrow", sans-serif;
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: 7px;
+}
+#scene a { cursor: pointer; }
+#scene a:hover .t-work { fill: var(--nail); }
+
+.scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--paper);
+  font-size: 15px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  transition: opacity 0.3s ease;
+  animation: hint-bob 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hint-bob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%      { transform: translateX(-50%) translateY(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-hint { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* ============ portfolio ============ */
+
+.work {
+  background: var(--flood);
+  padding: clamp(48px, 8vw, 120px) clamp(24px, 6vw, 96px);
+}
+
+.work-head h2 {
+  font-family: "Anton", "Arial Narrow", Impact, sans-serif;
+  font-size: clamp(44px, 7vw, 104px);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.work-head p {
+  margin-top: 14px;
+  font-size: clamp(15px, 1.6vw, 20px);
+  font-weight: 400;
+  letter-spacing: 1px;
+  opacity: 0.75;
+}
+
+.grid {
+  list-style: none;
+  margin-top: clamp(36px, 5vw, 72px);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: clamp(16px, 2.4vw, 32px);
+}
+
+.tile a {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 4 / 3;
+  padding: clamp(18px, 2vw, 28px);
+  text-decoration: none;
+  transition: transform 0.25s ease;
+}
+
+.tile a:hover,
+.tile a:focus-visible {
+  transform: translateY(-8px) rotate(-1.2deg);
+}
+
+.tile .num {
+  font-family: "Anton", "Arial Narrow", Impact, sans-serif;
+  font-size: clamp(28px, 3vw, 44px);
+}
+
+.tile .name {
+  font-family: "Anton", "Arial Narrow", Impact, sans-serif;
+  font-size: clamp(26px, 2.6vw, 40px);
+  line-height: 1.05;
+  margin-top: auto;
+}
+
+.tile .cat {
+  font-size: 15px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-top: 6px;
+  opacity: 0.8;
+}
+
+.tile-blue   a { background: var(--blue);   color: var(--paper); }
+.tile-orange a { background: var(--orange); color: var(--ink); }
+.tile-pink   a { background: var(--pink);   color: var(--ink); }
+.tile-cream  a { background: var(--paper);  color: var(--ink); }
+.tile-green  a { background: var(--green);  color: var(--ink); }
+.tile-ink    a { background: var(--ink);    color: var(--paper); }
+
+/* ============ footer ============ */
+
+.foot {
+  margin-top: clamp(64px, 10vw, 140px);
+  text-align: center;
+}
+
+.foot-big {
+  font-family: "Anton", "Arial Narrow", Impact, sans-serif;
+  font-size: clamp(30px, 5vw, 72px);
+  letter-spacing: 2px;
+}
+
+.foot a {
+  color: var(--orange);
+  font-size: clamp(16px, 2vw, 22px);
+  letter-spacing: 1px;
+}
+
+.foot p + p { margin-top: 14px; }
+
+.foot-small {
+  opacity: 0.6;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
