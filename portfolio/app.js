@@ -18,13 +18,12 @@
   const streamSway = $("stream-sway");
   const cupCoffee = $("cup-coffee");
   const liquid = $("liquid");
+  const liquidBack = $("liquid-back");
   const liquidClip = $("liquid-clip-path");
   const persimmon = $("persimmon");
   const persimmonShadow = $("persimmon-shadow");
-  const persimmonDipRect = $("persimmon-dip-rect");
   const splash = $("splash");
   const cupShadow = $("cup-shadow");
-  const cupHandle = $("cup-handle");
   const ripples = [$("ripple0"), $("ripple1")];
   const fallDrops = [$("fall-drop0"), $("fall-drop1")];
   const workTease = $("work-tease");
@@ -32,8 +31,8 @@
   // fail soft if the markup and script versions ever mismatch (e.g. a
   // stale cached HTML): show the static scene instead of a dead page
   const required = [track, hint, potSwing, stream, streamBody, cupCoffee, liquid,
-    liquidClip, persimmon, persimmonShadow, persimmonDipRect, splash, cupShadow,
-    cupHandle, workTease].concat(ripples);
+    liquidBack, liquidClip, persimmon, persimmonShadow, splash, cupShadow,
+    workTease].concat(ripples);
   if (required.some((el) => !el)) {
     console.warn("hero: markup/script version mismatch — animation disabled");
     return;
@@ -194,10 +193,10 @@
      per frame and capped at the pool surface (they feed it, then submerge
      as it rises past them) */
   const DRIPS = [
-    { x: 505, neckHalf: 9, beadR: 12.5, s0: 0.335 },
-    { x: 566, neckHalf: 6.5, beadR: 9, s0: 0.375 },
-    { x: 700, neckHalf: 7.5, beadR: 10.5, s0: 0.355 },
-    { x: 766, neckHalf: 10, beadR: 13.5, s0: 0.32 },
+    { x: 505, neckHalf: 10, beadR: 10.5, s0: 0.335 },
+    { x: 566, neckHalf: 7.5, beadR: 7, s0: 0.375 },
+    { x: 700, neckHalf: 8.5, beadR: 8.5, s0: 0.355 },
+    { x: 766, neckHalf: 11, beadR: 11.5, s0: 0.32 },
   ];
 
   /* drip half-width profile along its spine, s ∈ [0..1] top→tip: fillet
@@ -205,7 +204,7 @@
   function dripHalfWidth(s, neckHalf, beadR, wScale) {
     const fillet = neckHalf * 0.85 * Math.exp(-s * 6);
     const shaft = neckHalf * (0.95 - 0.35 * s);
-    const bead = beadR * Math.exp(-Math.pow((s - 1) / 0.26, 2));
+    const bead = beadR * Math.exp(-Math.pow((s - 1) / 0.34, 2));
     return (Math.max(shaft, bead) + fillet) * wScale;
   }
 
@@ -222,10 +221,6 @@
     for (let i = 0; i <= T; i++) {
       const th = Math.PI - (Math.PI * i) / T;
       pts.push([cx + rx * Math.cos(th), cy - ryT * Math.sin(th)]);
-    }
-    // — right rim-wrap corner: curls down and tucks in —
-    if (wrapP > 0.01) {
-      pts.push([cx + rx + 4 * wrapP, cy + 9 * wrapP]);
     }
     // — underside arc, right → left, with drip excursions —
     const active = dripList
@@ -252,7 +247,7 @@
         }
         const cap = dripHalfWidth(1, d.neckHalf, d.beadR, wScale);
         const tipX = d.x + drift(d.len);
-        for (const a of [0.32, 0.9, Math.PI / 2, 2.24, 2.82]) {
+        for (const a of [0.28, 0.7, 1.12, Math.PI / 2, 2.02, 2.44, 2.86]) {
           pts.push([tipX + cap * Math.cos(a), lipY + d.len + cap * Math.sin(a)]);
         }
         for (let k = S; k >= 0; k--) {
@@ -261,10 +256,6 @@
         }
       }
       pts.push([x, y]);
-    }
-    // — left rim-wrap corner —
-    if (wrapP > 0.01) {
-      pts.push([cx - rx - 4 * wrapP, cy + 9 * wrapP]);
     }
     return smoothClosedPath(pts);
   }
@@ -287,23 +278,28 @@
     if (FB_A > 0.01) y -= FB_A * Math.exp(-((x - FB_X) * (x - FB_X)) / (125 * 125));
     return y;
   }
-  // liquid depth below the table line: rises to a flat plateau (below the
-  // canvas) wherever liquid stands more than ~8px deep, so submerged
-  // geometry is covered by one system with no seams
-  function depthAt(x) {
-    const deficit = moundAt(x) + R;
-    return Math.min(R * 4, 760) + 250 * easeInOut(clamp(deficit / 2.5, 0, 1));
+  /* ---- the two curtains: one surface, rendered twice ----
+     BACK: the pool body behind all objects — the horizon silhouette.
+     FRONT: same surface, its top edge displaced DOWN at each foreground
+     object's column to that object's own floor-based waterline, so
+     objects submerge bottom-up from their own bases while the horizon
+     passes behind them. Dips shrink to zero as the pool deepens, and
+     the two curtains converge into the uniform flood. */
+  const WATERLINE_K = 1.8; // waterline climb per unit of local pool depth
+  let CUP_DIP = 0, FRUIT_DIP = 0, FRUIT_X = PERSIMMON.cx;
+  function frontTopAt(x) {
+    let y = surfaceAt(x);
+    if (CUP_DIP > 0.1) y += CUP_DIP * Math.exp(-Math.pow((x - CUP.cx) / 235, 2));
+    if (FRUIT_DIP > 0.1) y += FRUIT_DIP * Math.exp(-Math.pow((x - FRUIT_X) / 165, 2));
+    return y;
   }
-  function buildLiquidPath() {
-    if (H < 0.5 && R < 0.5 && FB_A < 0.5) return "";
-    let d = `M-20 ${surfaceAt(-20).toFixed(1)}`;
+  function buildCurtain(topFn) {
+    if (H < 0.5 && R < 0.5) return "";
+    let d = `M-20 ${topFn(-20).toFixed(1)}`;
     for (let x = 4; x <= 1690; x += 24) {
-      d += ` L${x} ${surfaceAt(x).toFixed(1)}`;
+      d += ` L${x} ${topFn(x).toFixed(1)}`;
     }
-    for (let x = 1690; x >= -20; x -= 48) {
-      d += ` L${x} ${(TABLE_Y + 2 + depthAt(x)).toFixed(1)}`;
-    }
-    d += " Z";
+    d += " L1690 1100 L-20 1100 Z";
     return d;
   }
 
@@ -369,8 +365,8 @@
     let rx = level <= 0 ? 0 : lerp(lerp(92, CUP.rimRx, level), 176, bulge);
     let ryT = lerp(lerp(17, CUP.rimRy, level), 42, bulge);
     let ryB = lerp(lerp(17, CUP.rimRy, level), 45, bulge);
-    rx = lerp(rx, 192, wrapP);
-    ryT = lerp(ryT, 55, wrapP);
+    rx = lerp(rx, 188.5, wrapP);
+    ryT = lerp(ryT, 50, wrapP);
     ryB = lerp(ryB, 48.5, wrapP);
     const dripList = DRIPS.map((d) => {
       const lipY = cy + ryB * Math.sqrt(Math.max(0, 1 - Math.pow((d.x - CUP.cx) / Math.max(rx, 1), 2)));
@@ -407,10 +403,13 @@
        BELOW, never from the table-horizon line. --- */
     const drift = 40 * easeInOut(seg(p, 0.58, 0.76));
     FB_X = PERSIMMON.cx + drift;
+    FRUIT_X = FB_X;
     FB_A = 0; // fruit displacement is set after buoyancy below
     const fruitDeficit = moundAt(PERSIMMON.cx) + R;
-    // the waterline on the fruit, climbing from its base with pool depth
-    const fruitWater = PERSIMMON.base - 1.8 * fruitDeficit;
+    // the waterline on the fruit: climbs from its base with local pool
+    // depth, bobbing gently with the flood's wave
+    const fruitWater =
+      PERSIMMON.base - WATERLINE_K * fruitDeficit + AMP * 0.6 * Math.sin(FB_X * 0.02 + PHASE);
     const draft = 100 + 460 * easeInOut(seg(p, 0.7, 0.8));
     const ty = Math.min(0, fruitWater + draft - PERSIMMON.base);
     const slope = (surfaceCore(FB_X + 40) - surfaceCore(FB_X - 40)) / 80;
@@ -423,23 +422,19 @@
       "opacity",
       Math.min(clamp(1 + ty / 28, 0, 1), 1 - seg(fruitDeficit, 0.3, 2)).toFixed(3)
     );
-    // the waterline clip sits at the fruit's waterline (group-local:
-    // subtract the float lift), kept world-horizontal against the tilt
-    const dipY = fruitDeficit > 0.15 ? fruitWater - ty : 2000;
-    persimmonDipRect.setAttribute("y", dipY.toFixed(1));
-    persimmonDipRect.setAttribute(
-      "transform",
-      `rotate(${(-rot).toFixed(2)} ${PERSIMMON.cx} ${dipY.toFixed(1)})`
-    );
     // the floating fruit lifts the surface around itself
     FB_A = clamp(-ty * 0.15, 0, 13) * (1 - seg(p, 0.72, 0.8));
 
-    /* --- build the liquid body --- */
-    const liquidD = buildLiquidPath();
-    liquid.setAttribute("d", liquidD);
-    liquidClip.setAttribute("d", liquidD);
+    /* --- the two curtains --- */
+    const cupDeficit = moundAt(CUP.cx) + R;
+    const cupWater = 997 - WATERLINE_K * cupDeficit;
+    CUP_DIP = Math.max(0, cupWater - surfaceCore(CUP.cx));
+    FRUIT_DIP = Math.max(0, fruitWater - surfaceCore(FRUIT_X));
+    liquidBack.setAttribute("d", buildCurtain(surfaceAt));
+    const frontD = buildCurtain(frontTopAt);
+    liquid.setAttribute("d", frontD);
+    liquidClip.setAttribute("d", frontD);
     cupShadow.setAttribute("opacity", (1 - seg(moundP, 0.4, 0.75)).toFixed(3));
-    cupHandle.setAttribute("opacity", (1 - seg(moundAt(430) + R, 18, 45)).toFixed(3));
 
     /* --- the stream always ends ON the landing surface --- */
     let landing = IMPACT_Y + 2;
